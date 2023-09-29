@@ -1,0 +1,48 @@
+name: Merge Trilinos/trilinos/develop into E3SM-Project/trilinos/develop
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # every day at midnight
+  workflow_dispatch: # sync on button click
+
+jobs:
+  merge-upstream-develop:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Show action trigger
+        run: echo "The job was triggered by a ${{github.event_name}} event."
+      - name: Get current date
+        id: date
+        run: echo "DATE=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
+          fetch-depth: 0
+          ref: develop
+      - name: Add upstream repo
+        run: git remote add upstream https://github.com/trilinos/trilinos
+      - name: Fetch upstream repo
+        run: git fetch upstream develop
+      - name: Set git user info
+        run : |
+          git config --global user.email "lbertag@sandia.gov"
+          git config --global user.name "Luca Bertagna"
+      - name: Merge upstream develop
+        run: git merge upstream/develop
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@v5
+        with:
+          branch: update-develop-${{ steps.date.outputs.DATE }}
+          delete-branch: true
+          base: develop
+          title: Merge trilinos/develop into e3sm-project/develop
+          body: Created by Github action
+      - name: Merge Pull Request
+        if: ${{ steps.cpr.outputs.pull-request-number }}
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
