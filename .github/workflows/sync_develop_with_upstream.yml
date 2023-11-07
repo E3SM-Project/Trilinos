@@ -36,6 +36,7 @@ jobs:
         id: cpr
         uses: peter-evans/create-pull-request@v5
         with:
+          token: ${{ secrets.E3SM_WORKFLOW_PAT }}
           branch: update-develop-${{ steps.date.outputs.DATE }}
           delete-branch: true
           base: develop
