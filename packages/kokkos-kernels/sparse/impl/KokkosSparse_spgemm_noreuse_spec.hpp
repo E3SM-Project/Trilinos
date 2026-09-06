@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #ifndef KOKKOSSPARSE_IMPL_SPGEMM_NOREUSE_SPEC_HPP_
 #define KOKKOSSPARSE_IMPL_SPGEMM_NOREUSE_SPEC_HPP_
 
@@ -66,7 +53,8 @@ template <class CMatrix, class AMatrix, class BMatrix,
           bool tpl_spec_avail = spgemm_noreuse_tpl_spec_avail<CMatrix, AMatrix, BMatrix>::value,
           bool eti_spec_avail = spgemm_noreuse_eti_spec_avail<CMatrix, AMatrix, BMatrix>::value>
 struct SPGEMM_NOREUSE {
-  static CMatrix spgemm_noreuse(const AMatrix& A, bool transA, const BMatrix& B, bool transB);
+  static CMatrix spgemm_noreuse(KokkosSparse::SPGEMMAlgorithm algo, const AMatrix& A, bool transA, const BMatrix& B,
+                                bool transB);
 };
 
 #if !defined(KOKKOSKERNELS_ETI_ONLY) || KOKKOSKERNELS_IMPL_COMPILE_LIBRARY
@@ -74,7 +62,8 @@ struct SPGEMM_NOREUSE {
 // Unification layer
 template <class CMatrix, class AMatrix, class BMatrix>
 struct SPGEMM_NOREUSE<CMatrix, AMatrix, BMatrix, false, KOKKOSKERNELS_IMPL_COMPILE_LIBRARY> {
-  static CMatrix spgemm_noreuse(const AMatrix& A, bool transA, const BMatrix& B, bool transB) {
+  static CMatrix spgemm_noreuse(KokkosSparse::SPGEMMAlgorithm algo, const AMatrix& A, bool transA, const BMatrix& B,
+                                bool transB) {
     using device_t    = typename CMatrix::device_type;
     using scalar_t    = typename CMatrix::value_type;
     using ordinal_t   = typename CMatrix::ordinal_type;
@@ -85,20 +74,19 @@ struct SPGEMM_NOREUSE<CMatrix, AMatrix, BMatrix, false, KOKKOSKERNELS_IMPL_COMPI
     KokkosKernels::Experimental::KokkosKernelsHandle<size_type, ordinal_t, scalar_t, typename device_t::execution_space,
                                                      typename device_t::memory_space, typename device_t::memory_space>
         kh;
-    kh.create_spgemm_handle();
+    kh.create_spgemm_handle(algo);
     // A is m*n, B is n*k, C is m*k
     ordinal_t m = A.numRows();
     ordinal_t n = B.numRows();
     ordinal_t k = B.numCols();
     c_rowmap_t row_mapC(Kokkos::view_alloc(Kokkos::WithoutInitializing, "C rowmap"), m + 1);
-    KokkosSparse::Experimental::spgemm_symbolic(&kh, m, n, k, A.graph.row_map, A.graph.entries, transA, B.graph.row_map,
-                                                B.graph.entries, transB, row_mapC);
+    KokkosSparse::spgemm_symbolic(&kh, m, n, k, A.graph.row_map, A.graph.entries, transA, B.graph.row_map,
+                                  B.graph.entries, transB, row_mapC);
     size_type c_nnz = kh.get_spgemm_handle()->get_c_nnz();
     c_entries_t entriesC(Kokkos::view_alloc(Kokkos::WithoutInitializing, "C entries"), c_nnz);
     c_values_t valuesC(Kokkos::view_alloc(Kokkos::WithoutInitializing, "C values"), c_nnz);
-    KokkosSparse::Experimental::spgemm_numeric(&kh, m, n, k, A.graph.row_map, A.graph.entries, A.values, transA,
-                                               B.graph.row_map, B.graph.entries, B.values, transB, row_mapC, entriesC,
-                                               valuesC);
+    KokkosSparse::spgemm_numeric(&kh, m, n, k, A.graph.row_map, A.graph.entries, A.values, transA, B.graph.row_map,
+                                 B.graph.entries, B.values, transB, row_mapC, entriesC, valuesC);
     kh.destroy_spgemm_handle();
     return CMatrix("C", m, k, c_nnz, valuesC, row_mapC, entriesC);
   }

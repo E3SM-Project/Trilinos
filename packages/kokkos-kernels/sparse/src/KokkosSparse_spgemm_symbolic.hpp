@@ -1,28 +1,13 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
-#ifndef _KOKKOS_SPGEMM_SYMBOLIC_HPP
-#define _KOKKOS_SPGEMM_SYMBOLIC_HPP
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
+#ifndef KOKKOSSPARSE_SPGEMM_SYMBOLIC_HPP
+#define KOKKOSSPARSE_SPGEMM_SYMBOLIC_HPP
 
 #include "KokkosKernels_helpers.hpp"
 #include "KokkosSparse_spgemm_symbolic_spec.hpp"
 #include "KokkosSparse_Utils.hpp"
 
 namespace KokkosSparse {
-
-namespace Experimental {
 
 template <typename KernelHandle, typename alno_row_view_t_, typename alno_nnz_view_t_, typename blno_row_view_t_,
           typename blno_nnz_view_t_, typename clno_row_view_t_>
@@ -163,9 +148,7 @@ void spgemm_symbolic(KernelHandle *handle, typename KernelHandle::const_nnz_lno_
 
   auto algo = spgemmHandle->get_algorithm_type();
 
-  if (algo == SPGEMM_DEBUG || algo == SPGEMM_SERIAL) {
-    // Never call a TPL if serial/debug is requested (this is needed for
-    // testing)
+  if (Impl::is_spgemm_algorithm_native(algo)) {
     KokkosSparse::Impl::SPGEMM_SYMBOLIC<const_handle_type,  // KernelHandle,
                                         Internal_alno_row_view_t_, Internal_alno_nnz_view_t_, Internal_blno_row_view_t_,
                                         Internal_blno_nnz_view_t_, Internal_clno_row_view_t_,
@@ -183,6 +166,5 @@ void spgemm_symbolic(KernelHandle *handle, typename KernelHandle::const_nnz_lno_
   }
 }
 
-}  // namespace Experimental
 }  // namespace KokkosSparse
 #endif

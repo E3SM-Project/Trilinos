@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #include <gtest/gtest.h>
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Random.hpp>
@@ -24,24 +11,24 @@ template <class ViewTypeA, class ViewTypeB, class Device>
 void impl_test_abs(int N) {
   typedef typename ViewTypeA::value_type ScalarA;
   typedef typename ViewTypeB::value_type ScalarB;
-  typedef Kokkos::ArithTraits<ScalarA> AT;
+  typedef KokkosKernels::ArithTraits<ScalarA> AT;
 
   typename AT::mag_type eps = AT::epsilon() * 10;
 
-  view_stride_adapter<ViewTypeA> x("X", N);
-  view_stride_adapter<ViewTypeB> y("Y", N);
-  view_stride_adapter<ViewTypeB> org_y("Org_Y", N);
+  TestUtils::view_stride_adapter<ViewTypeA> x("X", N);
+  TestUtils::view_stride_adapter<ViewTypeB> y("Y", N);
+  TestUtils::view_stride_adapter<ViewTypeB> org_y("Org_Y", N);
 
   Kokkos::Random_XorShift64_Pool<typename Device::execution_space> rand_pool(13718);
 
   {
     ScalarA randStart, randEnd;
-    Test::getRandomBounds(1.0, randStart, randEnd);
+    TestUtils::getRandomBounds(1.0, randStart, randEnd);
     Kokkos::fill_random(x.d_view, rand_pool, randStart, randEnd);
   }
   {
     ScalarB randStart, randEnd;
-    Test::getRandomBounds(1.0, randStart, randEnd);
+    TestUtils::getRandomBounds(1.0, randStart, randEnd);
     Kokkos::fill_random(y.d_view, rand_pool, randStart, randEnd);
   }
 
@@ -70,22 +57,22 @@ template <class ViewTypeA, class ViewTypeB, class Device>
 void impl_test_abs_mv(int N, int K) {
   typedef typename ViewTypeA::value_type ScalarA;
   typedef typename ViewTypeB::value_type ScalarB;
-  typedef Kokkos::ArithTraits<ScalarA> AT;
+  typedef KokkosKernels::ArithTraits<ScalarA> AT;
 
-  view_stride_adapter<ViewTypeA> x("X", N, K);
-  view_stride_adapter<ViewTypeB> y("Y", N, K);
-  view_stride_adapter<ViewTypeB> org_y("Org_Y", N, K);
+  TestUtils::view_stride_adapter<ViewTypeA> x("X", N, K);
+  TestUtils::view_stride_adapter<ViewTypeB> y("Y", N, K);
+  TestUtils::view_stride_adapter<ViewTypeB> org_y("Org_Y", N, K);
 
   Kokkos::Random_XorShift64_Pool<typename Device::execution_space> rand_pool(13718);
 
   {
     ScalarA randStart, randEnd;
-    Test::getRandomBounds(1.0, randStart, randEnd);
+    TestUtils::getRandomBounds(1.0, randStart, randEnd);
     Kokkos::fill_random(x.d_view, rand_pool, randStart, randEnd);
   }
   {
     ScalarB randStart, randEnd;
-    Test::getRandomBounds(1.0, randStart, randEnd);
+    TestUtils::getRandomBounds(1.0, randStart, randEnd);
     Kokkos::fill_random(y.d_view, rand_pool, randStart, randEnd);
   }
 

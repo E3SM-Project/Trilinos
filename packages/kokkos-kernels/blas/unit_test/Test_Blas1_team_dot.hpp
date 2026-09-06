@@ -1,23 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
-// Note: Luc Berger-Vergiat 04/14/21
-//       This tests uses KOKKOS_LAMBDA so we need
-//       to make sure that these are enabled in
-//       the CUDA backend before including this test.
-#if !defined(TEST_CUDA_BLAS_CPP) || defined(KOKKOS_ENABLE_CUDA_LAMBDA)
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #include <gtest/gtest.h>
 #include <Kokkos_Core.hpp>
@@ -40,8 +22,8 @@ void impl_test_team_dot(int N) {
   typedef typename ViewTypeA::value_type ScalarA;
   typedef typename ViewTypeB::value_type ScalarB;
 
-  view_stride_adapter<ViewTypeA> a("a", N);
-  view_stride_adapter<ViewTypeB> b("b", N);
+  TestUtils::view_stride_adapter<ViewTypeA> a("a", N);
+  TestUtils::view_stride_adapter<ViewTypeB> b("b", N);
 
   Kokkos::Random_XorShift64_Pool<execution_space> rand_pool(13718);
 
@@ -142,8 +124,8 @@ void impl_test_team_dot_mv(int N, int K) {
   typedef typename ViewTypeA::value_type ScalarA;
   typedef typename ViewTypeB::value_type ScalarB;
 
-  view_stride_adapter<ViewTypeA> a("A", N, K);
-  view_stride_adapter<ViewTypeB> b("B", N, K);
+  TestUtils::view_stride_adapter<ViewTypeA> a("A", N, K);
+  TestUtils::view_stride_adapter<ViewTypeB> b("B", N, K);
 
   Kokkos::Random_XorShift64_Pool<execution_space> rand_pool(13718);
 
@@ -337,5 +319,3 @@ TEST_F( TestCategory, team_dot_mv_double_int ) {
     test_team_dot_mv<double,int,TestDevice> ();
 }
 #endif*/
-
-#endif  // Check for lambda availability in CUDA backend

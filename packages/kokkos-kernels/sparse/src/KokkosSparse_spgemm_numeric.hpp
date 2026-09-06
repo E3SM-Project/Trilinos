@@ -1,28 +1,13 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
-#ifndef _KOKKOS_SPGEMM_NUMERIC_HPP
-#define _KOKKOS_SPGEMM_NUMERIC_HPP
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
+#ifndef KOKKOSSPARSE_SPGEMM_NUMERIC_HPP
+#define KOKKOSSPARSE_SPGEMM_NUMERIC_HPP
 
 #include "KokkosKernels_helpers.hpp"
 #include "KokkosSparse_spgemm_numeric_spec.hpp"
 #include "KokkosSparse_bspgemm_numeric_spec.hpp"
 
 namespace KokkosSparse {
-
-namespace Experimental {
 
 //
 // NOTE: block_dim = 1 for CRS-formated views
@@ -190,18 +175,6 @@ void spgemm_numeric(KernelHandle *handle, typename KernelHandle::const_nnz_lno_t
   Internal_clno_nnz_view_t_ nonconst_c_l(entriesC.data(), entriesC.extent(0));
   Internal_cscalar_nnz_view_t_ nonconst_c_s(valuesC.data(), valuesC.extent(0));
 
-  if (block_dim > 1) {
-    KokkosSparse::Impl::BSPGEMM_NUMERIC<
-        const_handle_type, Internal_alno_row_view_t_, Internal_alno_nnz_view_t_, Internal_ascalar_nnz_view_t_,
-        Internal_blno_row_view_t_, Internal_blno_nnz_view_t_, Internal_bscalar_nnz_view_t_, Internal_clno_row_view_t_,
-        Internal_clno_nnz_view_t_, Internal_cscalar_nnz_view_t_>::bspgemm_numeric(&tmp_handle, m, n, k, block_dim,
-                                                                                  const_a_r, const_a_l, const_a_s,
-                                                                                  transposeA, const_b_r, const_b_l,
-                                                                                  const_b_s, transposeB, const_c_r,
-                                                                                  nonconst_c_l, nonconst_c_s);
-    return;
-  }
-
   auto spgemmHandle = tmp_handle.get_spgemm_handle();
 
   if (!spgemmHandle) {
@@ -220,7 +193,32 @@ void spgemm_numeric(KernelHandle *handle, typename KernelHandle::const_nnz_lno_t
 
   auto algo = spgemmHandle->get_algorithm_type();
 
-  if (algo == SPGEMM_DEBUG || algo == SPGEMM_SERIAL) {
+  if (block_dim > 1) {
+    if (Impl::is_spgemm_algorithm_native(algo)) {
+      KokkosSparse::Impl::BSPGEMM_NUMERIC<
+          const_handle_type, Internal_alno_row_view_t_, Internal_alno_nnz_view_t_, Internal_ascalar_nnz_view_t_,
+          Internal_blno_row_view_t_, Internal_blno_nnz_view_t_, Internal_bscalar_nnz_view_t_, Internal_clno_row_view_t_,
+          Internal_clno_nnz_view_t_, Internal_cscalar_nnz_view_t_, false>::bspgemm_numeric(&tmp_handle, m, n, k,
+                                                                                           block_dim, const_a_r,
+                                                                                           const_a_l, const_a_s,
+                                                                                           transposeA, const_b_r,
+                                                                                           const_b_l, const_b_s,
+                                                                                           transposeB, const_c_r,
+                                                                                           nonconst_c_l, nonconst_c_s);
+    } else {
+      KokkosSparse::Impl::BSPGEMM_NUMERIC<
+          const_handle_type, Internal_alno_row_view_t_, Internal_alno_nnz_view_t_, Internal_ascalar_nnz_view_t_,
+          Internal_blno_row_view_t_, Internal_blno_nnz_view_t_, Internal_bscalar_nnz_view_t_, Internal_clno_row_view_t_,
+          Internal_clno_nnz_view_t_, Internal_cscalar_nnz_view_t_>::bspgemm_numeric(&tmp_handle, m, n, k, block_dim,
+                                                                                    const_a_r, const_a_l, const_a_s,
+                                                                                    transposeA, const_b_r, const_b_l,
+                                                                                    const_b_s, transposeB, const_c_r,
+                                                                                    nonconst_c_l, nonconst_c_s);
+    }
+    return;
+  }
+
+  if (Impl::is_spgemm_algorithm_native(algo)) {
     // Never call a TPL if serial/debug is requested (this is needed for
     // testing)
     KokkosSparse::Impl::SPGEMM_NUMERIC<
@@ -243,7 +241,6 @@ void spgemm_numeric(KernelHandle *handle, typename KernelHandle::const_nnz_lno_t
   }
 }
 
-}  // namespace Experimental
 }  // namespace KokkosSparse
 
 #endif

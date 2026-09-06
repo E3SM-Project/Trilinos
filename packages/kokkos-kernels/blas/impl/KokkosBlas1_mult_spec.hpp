@@ -1,24 +1,11 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #ifndef KOKKOSBLAS1_MULT_SPEC_HPP_
 #define KOKKOSBLAS1_MULT_SPEC_HPP_
 
 #include "KokkosKernels_config.h"
 #include "Kokkos_Core.hpp"
-#include "Kokkos_InnerProductSpaceTraits.hpp"
+#include "KokkosKernels_InnerProductSpaceTraits.hpp"
 
 #if !defined(KOKKOSKERNELS_ETI_ONLY) || KOKKOSKERNELS_IMPL_COMPILE_LIBRARY
 #include <KokkosBlas1_mult_impl.hpp>
@@ -41,17 +28,13 @@ struct mult_eti_spec_avail {
 // We may spread out definitions (see _INST macro below) across one or
 // more .cpp files.
 //
-#define KOKKOSBLAS1_MULT_ETI_SPEC_AVAIL(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                                        \
-  template <>                                                                                                         \
-  struct mult_eti_spec_avail<                                                                                         \
-      EXEC_SPACE,                                                                                                     \
-      Kokkos::View<SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                         \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                         \
-      1> {                                                                                                            \
-    enum : bool { value = true };                                                                                     \
+#define KOKKOSBLAS1_MULT_ETI_SPEC_AVAIL(SCALAR, LAYOUT, EXEC_SPACE)                                    \
+  template <>                                                                                          \
+  struct mult_eti_spec_avail<                                                                          \
+      EXEC_SPACE, Kokkos::View<SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >,       \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, 1> {  \
+    enum : bool { value = true };                                                                      \
   };
 
 //
@@ -61,17 +44,13 @@ struct mult_eti_spec_avail {
 // We may spread out definitions (see _INST macro below) across one or
 // more .cpp files.
 //
-#define KOKKOSBLAS1_MULT_MV_ETI_SPEC_AVAIL(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                                      \
-  template <>                                                                                                          \
-  struct mult_eti_spec_avail<                                                                                          \
-      EXEC_SPACE,                                                                                                      \
-      Kokkos::View<SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                       \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                          \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                          \
-      2> {                                                                                                             \
-    enum : bool { value = true };                                                                                      \
+#define KOKKOSBLAS1_MULT_MV_ETI_SPEC_AVAIL(SCALAR, LAYOUT, EXEC_SPACE)                                  \
+  template <>                                                                                           \
+  struct mult_eti_spec_avail<                                                                           \
+      EXEC_SPACE, Kokkos::View<SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >,        \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, 2> {  \
+    enum : bool { value = true };                                                                       \
   };
 
 // Include the actual specialization declarations
@@ -219,27 +198,19 @@ struct Mult<execution_space, YV, AV, XV, 1, false, KOKKOSKERNELS_IMPL_COMPILE_LI
 // one or more .cpp files.
 //
 
-#define KOKKOSBLAS1_MULT_ETI_SPEC_DECL(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                                         \
-  extern template struct Mult<                                                                                        \
-      EXEC_SPACE,                                                                                                     \
-      Kokkos::View<SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                         \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                         \
-      1, false, true>;
+#define KOKKOSBLAS1_MULT_ETI_SPEC_DECL(SCALAR, LAYOUT, EXEC_SPACE)                                     \
+  extern template struct Mult<                                                                         \
+      EXEC_SPACE, Kokkos::View<SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >,       \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, 1, false, true>;
 
 #include <generated_specializations_hpp/KokkosBlas1_mult_eti_spec_decl.hpp>
 
-#define KOKKOSBLAS1_MULT_ETI_SPEC_INST(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                                         \
-  template struct Mult<                                                                                               \
-      EXEC_SPACE,                                                                                                     \
-      Kokkos::View<SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                         \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                         \
-      1, false, true>;
+#define KOKKOSBLAS1_MULT_ETI_SPEC_INST(SCALAR, LAYOUT, EXEC_SPACE)                                     \
+  template struct Mult<                                                                                \
+      EXEC_SPACE, Kokkos::View<SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >,       \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, 1, false, true>;
 
 //
 // Macro for declaration of full specialization of
@@ -249,27 +220,19 @@ struct Mult<execution_space, YV, AV, XV, 1, false, KOKKOSKERNELS_IMPL_COMPILE_LI
 // one or more .cpp files.
 //
 
-#define KOKKOSBLAS1_MULT_MV_ETI_SPEC_DECL(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                                       \
-  extern template struct Mult<                                                                                         \
-      EXEC_SPACE,                                                                                                      \
-      Kokkos::View<SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                       \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                          \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                          \
-      2, false, true>;
+#define KOKKOSBLAS1_MULT_MV_ETI_SPEC_DECL(SCALAR, LAYOUT, EXEC_SPACE)                                   \
+  extern template struct Mult<                                                                          \
+      EXEC_SPACE, Kokkos::View<SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >,        \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, 2, false, true>;
 
 #include <generated_specializations_hpp/KokkosBlas1_mult_mv_eti_spec_decl.hpp>
 
-#define KOKKOSBLAS1_MULT_MV_ETI_SPEC_INST(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                                       \
-  template struct Mult<                                                                                                \
-      EXEC_SPACE,                                                                                                      \
-      Kokkos::View<SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                       \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                          \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                          \
-      2, false, true>;
+#define KOKKOSBLAS1_MULT_MV_ETI_SPEC_INST(SCALAR, LAYOUT, EXEC_SPACE)                                   \
+  template struct Mult<                                                                                 \
+      EXEC_SPACE, Kokkos::View<SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >,        \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, 2, false, true>;
 
 #include <KokkosBlas1_mult_tpl_spec_decl.hpp>
 

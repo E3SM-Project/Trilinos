@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOSBLAS2_SYR2_HPP_
 #define KOKKOSBLAS2_SYR2_HPP_
@@ -132,21 +119,21 @@ void syr2(const ExecutionSpace& space, const char trans[], const char uplo[],
 
   // Minimize the number of Impl::SYR2 instantiations, by standardizing
   // on particular View specializations for its template parameters.
-  typedef Kokkos::View<typename XViewType::const_value_type*,
-                       typename KokkosKernels::Impl::GetUnifiedLayoutPreferring<XViewType, ALayout>::array_layout,
-                       typename XViewType::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged> >
-      XVT;
+  using XVT = Kokkos::View<typename XViewType::const_value_type*,
+                           typename KokkosKernels::Impl::GetUnifiedLayoutPreferring<XViewType, ALayout>::array_layout,
+                           ExecutionSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
 
-  typedef Kokkos::View<typename YViewType::const_value_type*,
-                       typename KokkosKernels::Impl::GetUnifiedLayoutPreferring<YViewType, ALayout>::array_layout,
-                       typename YViewType::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged> >
-      YVT;
+  using YVT = Kokkos::View<typename YViewType::const_value_type*,
+                           typename KokkosKernels::Impl::GetUnifiedLayoutPreferring<YViewType, ALayout>::array_layout,
+                           ExecutionSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
 
-  typedef Kokkos::View<typename AViewType::non_const_value_type**, ALayout, typename AViewType::device_type,
-                       Kokkos::MemoryTraits<Kokkos::Unmanaged> >
-      AVT;
+  using AVT = Kokkos::View<typename AViewType::non_const_value_type**, ALayout, ExecutionSpace,
+                           Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
 
-  Impl::SYR2<ExecutionSpace, XVT, YVT, AVT>::syr2(space, trans, uplo, alpha, x, y, A);
+  XVT x_internal = KokkosKernels::Impl::unificationCast<XVT>(x);
+  YVT y_internal = KokkosKernels::Impl::unificationCast<YVT>(y);
+  AVT A_internal = KokkosKernels::Impl::unificationCast<AVT>(A);
+  Impl::SYR2<ExecutionSpace, XVT, YVT, AVT>::syr2(space, trans, uplo, alpha, x_internal, y_internal, A_internal);
 }
 
 /// \brief Rank-1 update (just lower portion or just upper portion) of a

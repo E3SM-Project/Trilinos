@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOSBLAS1_DOT_HPP_
 #define KOKKOSBLAS1_DOT_HPP_
@@ -38,7 +25,7 @@ namespace KokkosBlas {
 /// \return The dot product result; a single value.
 template <class execution_space, class XVector, class YVector,
           typename std::enable_if<Kokkos::is_execution_space_v<execution_space>, int>::type = 0>
-typename Kokkos::Details::InnerProductSpaceTraits<typename XVector::non_const_value_type>::dot_type dot(
+typename KokkosKernels::Details::InnerProductSpaceTraits<typename XVector::non_const_value_type>::dot_type dot(
     const execution_space& space, const XVector& x, const YVector& y) {
   static_assert(Kokkos::is_execution_space_v<execution_space>,
                 "KokkosBlas::dot: execution_space must be a valid Kokkos "
@@ -65,12 +52,13 @@ typename Kokkos::Details::InnerProductSpaceTraits<typename XVector::non_const_va
 
   using XVector_Internal = Kokkos::View<typename XVector::const_value_type*,
                                         typename KokkosKernels::Impl::GetUnifiedLayout<XVector>::array_layout,
-                                        typename XVector::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+                                        execution_space, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
   using YVector_Internal = Kokkos::View<typename YVector::const_value_type*,
                                         typename KokkosKernels::Impl::GetUnifiedLayout<YVector>::array_layout,
-                                        typename YVector::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+                                        execution_space, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
 
-  using dot_type = typename Kokkos::Details::InnerProductSpaceTraits<typename XVector::non_const_value_type>::dot_type;
+  using dot_type =
+      typename KokkosKernels::Details::InnerProductSpaceTraits<typename XVector::non_const_value_type>::dot_type;
   // result_type is usually just dot_type, except:
   //  if dot_type is float, result_type is double
   //  if dot_type is complex<float>, result_type is complex<double>
@@ -99,13 +87,13 @@ typename Kokkos::Details::InnerProductSpaceTraits<typename XVector::non_const_va
     // mfh 22 Jan 2020: We need the line below because
     // Kokkos::complex<T> lacks a constructor that takes a
     // Kokkos::complex<U> with U != T.
-    return Kokkos::Details::CastPossiblyComplex<dot_type, result_type>::cast(result);
+    return KokkosKernels::Details::CastPossiblyComplex<dot_type, result_type>::cast(result);
   } else {
     dot_type result{};
     RVector_Internal R = RVector_Internal(&result);
     Impl::Dot<execution_space, RVector_Internal, XVector_Internal, YVector_Internal>::dot(space, R, X, Y);
     space.fence();
-    return Kokkos::Details::CastPossiblyComplex<dot_type, result_type>::cast(result);
+    return KokkosKernels::Details::CastPossiblyComplex<dot_type, result_type>::cast(result);
   }
 }
 
@@ -122,7 +110,7 @@ typename Kokkos::Details::InnerProductSpaceTraits<typename XVector::non_const_va
 ///
 /// \return The dot product result; a single value.
 template <class XVector, class YVector>
-typename Kokkos::Details::InnerProductSpaceTraits<typename XVector::non_const_value_type>::dot_type dot(
+typename KokkosKernels::Details::InnerProductSpaceTraits<typename XVector::non_const_value_type>::dot_type dot(
     const XVector& x, const YVector& y) {
   return dot(typename XVector::execution_space{}, x, y);
 }
@@ -220,24 +208,22 @@ void dot(const execution_space& space, const RV& R, const XMV& X, const YMV& Y,
   // Create unmanaged versions of the input Views.
   using UnifiedXLayout  = typename KokkosKernels::Impl::GetUnifiedLayout<XMV>::array_layout;
   using UnifiedRVLayout = typename KokkosKernels::Impl::GetUnifiedLayoutPreferring<RV, UnifiedXLayout>::array_layout;
+  using UnifiedRVDevice =
+      std::conditional_t<Kokkos::SpaceAccessibility<Kokkos::HostSpace, typename RV::memory_space>::assignable,
+                         Kokkos::HostSpace, execution_space>;
 
-  typedef Kokkos::View<typename std::conditional<RV::rank == 0, typename RV::non_const_value_type,
-                                                 typename RV::non_const_value_type*>::type,
-                       UnifiedRVLayout, typename RV::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged>>
-      RV_Internal;
-  typedef Kokkos::View<typename std::conditional<XMV::rank == 1, typename XMV::const_value_type*,
-                                                 typename XMV::const_value_type**>::type,
-                       UnifiedXLayout, typename XMV::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged>>
-      XMV_Internal;
-  typedef Kokkos::View<typename std::conditional<YMV::rank == 1, typename YMV::const_value_type*,
-                                                 typename YMV::const_value_type**>::type,
-                       typename KokkosKernels::Impl::GetUnifiedLayout<YMV>::array_layout, typename YMV::device_type,
-                       Kokkos::MemoryTraits<Kokkos::Unmanaged>>
-      YMV_Internal;
+  using RV_Internal  = Kokkos::View<typename RV::non_const_data_type, UnifiedRVLayout, UnifiedRVDevice,
+                                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+  using XMV_Internal = Kokkos::View<typename XMV::const_data_type, UnifiedXLayout, execution_space,
+                                    Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+  using YMV_Internal =
+      Kokkos::View<typename YMV::const_data_type,
+                   typename KokkosKernels::Impl::GetUnifiedLayoutPreferring<YMV, UnifiedXLayout>::array_layout,
+                   execution_space, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
 
-  RV_Internal R_internal  = R;
-  XMV_Internal X_internal = X;
-  YMV_Internal Y_internal = Y;
+  RV_Internal R_internal  = KokkosKernels::Impl::unificationCast<RV_Internal>(R);
+  XMV_Internal X_internal = KokkosKernels::Impl::unificationCast<XMV_Internal>(X);
+  YMV_Internal Y_internal = KokkosKernels::Impl::unificationCast<YMV_Internal>(Y);
 
   Impl::Dot<execution_space, RV_Internal, XMV_Internal, YMV_Internal>::dot(space, R_internal, X_internal, Y_internal);
 }
