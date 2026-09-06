@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 /// \author Kim Liegeois (knliege@sandia.gov)
 
 #include "gtest/gtest.h"
@@ -57,7 +44,7 @@ struct Functor_TestBatchedSerialGesv {
   inline void run() {
     typedef typename VectorType::value_type value_type;
     std::string name_region("KokkosBatched::Test::SerialGesv");
-    const std::string name_value_type = Test::value_type_name<value_type>();
+    const std::string name_value_type = TestUtils::value_type_name<value_type>();
     std::string name                  = name_region + name_value_type;
     Kokkos::Profiling::pushRegion(name.c_str());
     Kokkos::RangePolicy<execution_space> policy(0, _X.extent(0));
@@ -69,9 +56,9 @@ struct Functor_TestBatchedSerialGesv {
 template <typename DeviceType, typename MatrixType, typename VectorType, typename AlgoTagType>
 void impl_test_batched_gesv(const int N, const int BlkSize) {
   typedef typename MatrixType::value_type value_type;
-  typedef Kokkos::ArithTraits<value_type> ats;
+  typedef KokkosKernels::ArithTraits<value_type> ats;
 
-  using MagnitudeType = typename Kokkos::ArithTraits<value_type>::mag_type;
+  using MagnitudeType = typename KokkosKernels::ArithTraits<value_type>::mag_type;
   using NormViewType  = Kokkos::View<MagnitudeType *, Kokkos::LayoutLeft, DeviceType>;
 
   NormViewType sqr_norm_j("sqr_norm_j", N);
@@ -104,7 +91,7 @@ void impl_test_batched_gesv(const int N, const int BlkSize) {
         -1, Kokkos::subview(A_host, l, Kokkos::ALL, Kokkos::ALL), Kokkos::subview(X_host, l, Kokkos::ALL), 1,
         Kokkos::subview(B_host, l, Kokkos::ALL));
 
-  KokkosBatched::SerialDot<Trans::NoTranspose>::invoke(B_host, B_host, sqr_norm_j_host);
+  KokkosBatched::SerialDot<Trans::ConjTranspose, 1>::invoke(B_host, B_host, sqr_norm_j_host);
 
   const MagnitudeType eps = 1.0e3 * ats::epsilon();
 

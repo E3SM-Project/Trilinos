@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #include <gtest/gtest.h>
 #include <Kokkos_Core.hpp>
@@ -26,9 +13,6 @@
 
 #include "KokkosSparse_spgemm.hpp"
 #include "KokkosSparse_CrsMatrix.hpp"
-
-#include <gtest/gtest.h>
-#include <Kokkos_Core.hpp>
 
 #include <KokkosKernels_IOUtils.hpp>
 #include <KokkosSparse_IOUtils.hpp>
@@ -72,8 +56,8 @@ void randomize_matrix_values(const Values &v) {
 }
 
 template <typename crsMat_t>
-void run_spgemm_noreuse(crsMat_t A, crsMat_t B, crsMat_t &C) {
-  C = KokkosSparse::spgemm<crsMat_t>(A, false, B, false);
+void run_spgemm_noreuse(KokkosSparse::SPGEMMAlgorithm algo, crsMat_t A, crsMat_t B, crsMat_t &C) {
+  C = KokkosSparse::spgemm<crsMat_t>(algo, A, false, B, false);
 }
 
 template <typename crsMat_t, typename device>
@@ -145,7 +129,6 @@ int run_spgemm_old_interface(crsMat_t &A, crsMat_t &B, KokkosSparse::SPGEMMAlgor
   KernelHandle kh;
   kh.set_team_work_size(16);
   kh.set_dynamic_scheduling(true);
-  // kh.set_verbose(true);
 
   kh.create_spgemm_handle(spgemm_algorithm);
   {
@@ -164,18 +147,16 @@ int run_spgemm_old_interface(crsMat_t &A, crsMat_t &B, KokkosSparse::SPGEMMAlgor
     EXPECT_FALSE(sh->are_rowptrs_computed());
     EXPECT_FALSE(sh->are_entries_computed());
 
-    KokkosSparse::Experimental::spgemm_symbolic(&kh, num_rows_A, num_rows_B, num_cols_B, A.graph.row_map,
-                                                A.graph.entries, false, B.graph.row_map, B.graph.entries, false,
-                                                row_mapC);
+    KokkosSparse::spgemm_symbolic(&kh, num_rows_A, num_rows_B, num_cols_B, A.graph.row_map, A.graph.entries, false,
+                                  B.graph.row_map, B.graph.entries, false, row_mapC);
 
     EXPECT_TRUE(sh->is_symbolic_called());
 
     size_t c_nnz_size = kh.get_spgemm_handle()->get_c_nnz();
     entriesC          = lno_nnz_view_t(Kokkos::view_alloc(Kokkos::WithoutInitializing, "entriesC"), c_nnz_size);
     valuesC           = scalar_view_t(Kokkos::view_alloc(Kokkos::WithoutInitializing, "valuesC"), c_nnz_size);
-    KokkosSparse::Experimental::spgemm_numeric(&kh, num_rows_A, num_rows_B, num_cols_B, A.graph.row_map,
-                                               A.graph.entries, A.values, false, B.graph.row_map, B.graph.entries,
-                                               B.values, false, row_mapC, entriesC, valuesC);
+    KokkosSparse::spgemm_numeric(&kh, num_rows_A, num_rows_B, num_cols_B, A.graph.row_map, A.graph.entries, A.values,
+                                 false, B.graph.row_map, B.graph.entries, B.values, false, row_mapC, entriesC, valuesC);
 
     EXPECT_TRUE(sh->are_entries_computed());
     EXPECT_TRUE(sh->is_numeric_called());
@@ -187,9 +168,9 @@ int run_spgemm_old_interface(crsMat_t &A, crsMat_t &B, KokkosSparse::SPGEMMAlgor
       B.values = scalar_view_t(Kokkos::view_alloc(Kokkos::WithoutInitializing, "new B values"), B.nnz());
       randomize_matrix_values(A.values);
       randomize_matrix_values(B.values);
-      KokkosSparse::Experimental::spgemm_numeric(&kh, num_rows_A, num_rows_B, num_cols_B, A.graph.row_map,
-                                                 A.graph.entries, A.values, false, B.graph.row_map, B.graph.entries,
-                                                 B.values, false, row_mapC, entriesC, valuesC);
+      KokkosSparse::spgemm_numeric(&kh, num_rows_A, num_rows_B, num_cols_B, A.graph.row_map, A.graph.entries, A.values,
+                                   false, B.graph.row_map, B.graph.entries, B.values, false, row_mapC, entriesC,
+                                   valuesC);
       EXPECT_TRUE(sh->are_entries_computed());
       EXPECT_TRUE(sh->is_numeric_called());
     }
@@ -245,12 +226,31 @@ void test_spgemm(lno_t m, lno_t k, lno_t n, size_type nnz, lno_t bandwidth, lno_
   std::vector<SPGEMMAlgorithm> algorithms;
   if (callMode == spgemm_noreuse) {
     // No-reuse interface always uses the default algorithm
-    algorithms = {SPGEMM_KK};
+    algorithms = {SPGEMM_DEFAULT, SPGEMM_KK};
+#ifdef KOKKOSKERNELS_ENABLE_TPL_CUSPARSE
+    // Also test available cuSPARSE algorithms for non-reuse interface
+#if (CUSPARSE_VERSION >= 12001)
+    algorithms.push_back(SPGEMM_CUSPARSE_ALG1);
+    algorithms.push_back(SPGEMM_CUSPARSE_ALG2);
+    algorithms.push_back(SPGEMM_CUSPARSE_ALG3);
+#endif
+#endif
   } else {
     algorithms = {
-        SPGEMM_KK, SPGEMM_KK_LP, SPGEMM_KK_MEMORY /* alias SPGEMM_KK_MEMSPEED */,
+        SPGEMM_DEFAULT, SPGEMM_KK, SPGEMM_KK_LP, SPGEMM_KK_MEMORY /* alias SPGEMM_KK_MEMSPEED */,
         SPGEMM_KK_SPEED /* alias SPGEMM_KK_DENSE */
     };
+#ifdef KOKKOSKERNELS_ENABLE_TPL_CUSPARSE
+    // Also test available cuSPARSE algorithms for reuse interface
+#if (CUSPARSE_VERSION < 12710)
+    algorithms.push_back(SPGEMM_CUSPARSE_DETERMINISTIC);
+    algorithms.push_back(SPGEMM_CUSPARSE_NONDETERMINISTIC);
+#else
+    algorithms.push_back(SPGEMM_CUSPARSE_ALG1);
+    algorithms.push_back(SPGEMM_CUSPARSE_ALG2);
+    algorithms.push_back(SPGEMM_CUSPARSE_ALG3);
+#endif
+#endif
   }
 
   for (auto spgemm_algorithm : algorithms) {
@@ -258,11 +258,17 @@ void test_spgemm(lno_t m, lno_t k, lno_t n, size_type nnz, lno_t bandwidth, lno_
     bool is_expected_to_fail = false;
 
     switch (spgemm_algorithm) {
+      case SPGEMM_DEFAULT: algo = "SPGEMM_DEFAULT"; break;
       case SPGEMM_KK: algo = "SPGEMM_KK"; break;
       case SPGEMM_KK_LP: algo = "SPGEMM_KK_LP"; break;
       case SPGEMM_KK_MEMSPEED: algo = "SPGEMM_KK_MEMSPEED"; break;
       case SPGEMM_KK_SPEED: algo = "SPGEMM_KK_SPEED"; break;
       case SPGEMM_KK_MEMORY: algo = "SPGEMM_KK_MEMORY"; break;
+      case SPGEMM_CUSPARSE_DETERMINISTIC: algo = "SPGEMM_CUSPARSE_DETERMINISTIC"; break;
+      case SPGEMM_CUSPARSE_NONDETERMINISTIC: algo = "SPGEMM_CUSPARSE_NONDETERMINISTIC"; break;
+      case SPGEMM_CUSPARSE_ALG1: algo = "SPGEMM_CUSPARSE_ALG1"; break;
+      case SPGEMM_CUSPARSE_ALG2: algo = "SPGEMM_CUSPARSE_ALG2"; break;
+      case SPGEMM_CUSPARSE_ALG3: algo = "SPGEMM_CUSPARSE_ALG3"; break;
       default: algo = "!!! UNKNOWN ALGO !!!";
     }
 
@@ -279,7 +285,7 @@ void test_spgemm(lno_t m, lno_t k, lno_t n, size_type nnz, lno_t bandwidth, lno_
         case spgemm_reuse_matrix:
           res = run_spgemm<crsMat_t, device>(A, B, spgemm_algorithm, output_mat, testReuse);
           break;
-        case spgemm_noreuse: run_spgemm_noreuse(A, B, output_mat); break;
+        case spgemm_noreuse: run_spgemm_noreuse(spgemm_algorithm, A, B, output_mat); break;
       }
     } catch (const char *message) {
       EXPECT_TRUE(is_expected_to_fail) << algo << ": " << message;
@@ -304,8 +310,11 @@ void test_spgemm(lno_t m, lno_t k, lno_t n, size_type nnz, lno_t bandwidth, lno_
     timer1.reset();
     if (!is_expected_to_fail) {
       EXPECT_TRUE((res == 0)) << algo;
-      bool is_identical = is_same_matrix<crsMat_t, device>(output_mat, output_mat2);
-      EXPECT_TRUE(is_identical) << algo;
+      const bool is_identical = TestUtils::is_same_matrix<crsMat_t, device>(output_mat, output_mat2);
+      EXPECT_TRUE(is_identical) << "SpGEMM result incorrect: algo=" << algo << ", callMode=" << int(callMode)
+                                << ", testReuse=" << int(testReuse) << ", m=" << m << ", k=" << k << ", n=" << n
+                                << ", nnz=" << nnz << ", bandwidth=" << bandwidth
+                                << ", row_size_variance=" << row_size_variance;
       // EXPECT_TRUE( equal) << algo;
     }
     // std::cout << "algo:" << algo << " spgemm_time:" << spgemm_time << "
@@ -358,11 +367,11 @@ void test_spgemm_symbolic(bool callSymbolicFirst, bool testEmpty) {
   KernelHandle kh;
   kh.create_spgemm_handle();
   if (callSymbolicFirst) {
-    KokkosSparse::Experimental::spgemm_symbolic(&kh, m, n, k, A.graph.row_map, A.graph.entries, false, B.graph.row_map,
-                                                B.graph.entries, false, C_rowmap);
+    KokkosSparse::spgemm_symbolic(&kh, m, n, k, A.graph.row_map, A.graph.entries, false, B.graph.row_map,
+                                  B.graph.entries, false, C_rowmap);
   }
-  KokkosSparse::Experimental::spgemm_symbolic(&kh, m, n, k, A.graph.row_map, A.graph.entries, false, B.graph.row_map,
-                                              B.graph.entries, false, C_rowmap, true);
+  KokkosSparse::spgemm_symbolic(&kh, m, n, k, A.graph.row_map, A.graph.entries, false, B.graph.row_map, B.graph.entries,
+                                false, C_rowmap, true);
   kh.destroy_spgemm_handle();
   bool isCorrect = KokkosKernels::Impl::kk_is_identical_view<const_rowmap_t, const_rowmap_t, size_type,
                                                              typename device::execution_space>(
@@ -439,7 +448,7 @@ void test_issue402() {
     success = false;
   }
   EXPECT_TRUE(success) << "SpGEMM still has issue 402 bug! Error message:\n" << errMsg << '\n';
-  bool correctResult = is_same_matrix<crsMat_t, device>(C, Cgold);
+  bool correctResult = TestUtils::is_same_matrix<crsMat_t, device>(C, Cgold);
   EXPECT_TRUE(correctResult) << "SpGEMM still has issue 402 bug; C=AA' is incorrect!\n";
 }
 

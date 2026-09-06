@@ -1,20 +1,7 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
-#ifndef _KOKKOS_SPGEMM_HPP
-#define _KOKKOS_SPGEMM_HPP
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
+#ifndef KOKKOSSPARSE_SPGEMM_HPP
+#define KOKKOSSPARSE_SPGEMM_HPP
 
 #include "KokkosSparse_spgemm_numeric.hpp"
 #include "KokkosSparse_spgemm_symbolic.hpp"
@@ -48,9 +35,8 @@ void spgemm_symbolic(KernelHandle& kh, const AMatrix& A, const bool Amode, const
   entries_type entriesC;
   values_type valuesC;
 
-  KokkosSparse::Experimental::spgemm_symbolic(&kh, A.numRows(), B.numRows(), B.numCols(), A.graph.row_map,
-                                              A.graph.entries, Amode, B.graph.row_map, B.graph.entries, Bmode,
-                                              row_mapC);
+  KokkosSparse::spgemm_symbolic(&kh, A.numRows(), B.numRows(), B.numCols(), A.graph.row_map, A.graph.entries, Amode,
+                                B.graph.row_map, B.graph.entries, Bmode, row_mapC);
 
   const size_t c_nnz_size = kh.get_spgemm_handle()->get_c_nnz();
   if (c_nnz_size) {
@@ -89,9 +75,8 @@ void block_spgemm_symbolic(KernelHandle& kh, const AMatrixType& A, const bool tr
 
   row_map_type row_mapC(Kokkos::view_alloc(Kokkos::WithoutInitializing, "non_const_lnow_row"), A.numRows() + 1);
 
-  KokkosSparse::Experimental::spgemm_symbolic(&kh, A.numRows(), B.numRows(), B.numCols(), A.graph.row_map,
-                                              A.graph.entries, transposeA, B.graph.row_map, B.graph.entries, transposeB,
-                                              row_mapC);
+  KokkosSparse::spgemm_symbolic(&kh, A.numRows(), B.numRows(), B.numCols(), A.graph.row_map, A.graph.entries,
+                                transposeA, B.graph.row_map, B.graph.entries, transposeB, row_mapC);
 
   entries_type entriesC;
   values_type valuesC;
@@ -125,9 +110,9 @@ void spgemm_numeric(KernelHandle& kh, const AMatrix& A, const bool Amode, const 
   // using entries_type = typename CMatrix::row_map_type::non_const_type;
   // using values_type  = typename CMatrix::values_type::non_const_type;
 
-  KokkosSparse::Experimental::spgemm_numeric(&kh, A.numRows(), B.numRows(), B.numCols(), A.graph.row_map,
-                                             A.graph.entries, A.values, Amode, B.graph.row_map, B.graph.entries,
-                                             B.values, Bmode, C.graph.row_map, C.graph.entries, C.values);
+  KokkosSparse::spgemm_numeric(&kh, A.numRows(), B.numRows(), B.numCols(), A.graph.row_map, A.graph.entries, A.values,
+                               Amode, B.graph.row_map, B.graph.entries, B.values, Bmode, C.graph.row_map,
+                               C.graph.entries, C.values);
 }
 
 ///
@@ -152,25 +137,28 @@ void block_spgemm_numeric(KernelHandle& kh, const AMatrix& A, const bool Amode, 
     throw std::invalid_argument("Block SpGEMM must be called for matrices with the same block size");
   }
 
-  KokkosSparse::Experimental::spgemm_numeric(&kh, A.numRows(), B.numRows(), B.numCols(), A.graph.row_map,
-                                             A.graph.entries, A.values, Amode, B.graph.row_map, B.graph.entries,
-                                             B.values, Bmode, C.graph.row_map, C.graph.entries, C.values, blockDim);
+  KokkosSparse::spgemm_numeric(&kh, A.numRows(), B.numRows(), B.numCols(), A.graph.row_map, A.graph.entries, A.values,
+                               Amode, B.graph.row_map, B.graph.entries, B.values, Bmode, C.graph.row_map,
+                               C.graph.entries, C.values, blockDim);
 }
 
 ///
 /// @brief
 ///
-/// @tparam CMatrix
-/// @tparam AMatrix
-/// @tparam BMatrix
-/// @param A
-/// @param Amode
-/// @param B
-/// @param Bmode
-/// @return CMatrix
+/// @tparam CMatrix Result matrix type.
+/// @tparam AMatrix Left input matrix type.
+/// @tparam BMatrix Right input matrix type.
+/// @param algo Algorithm to use.
+/// @param A Left input matrix.
+/// @param Amode Whether to transpose A (only Amode == false is currently supported)
+/// @param B Right input matrix.
+/// @param Bmode Whether to transpose B (only Bmode == false is currently supported)
+/// @param algo Algorithm option to use.
+/// @return CMatrix Product A*B.
 ///
 template <class CMatrix, class AMatrix, class BMatrix>
-CMatrix spgemm(const AMatrix& A, const bool Amode, const BMatrix& B, const bool Bmode) {
+CMatrix spgemm(KokkosSparse::SPGEMMAlgorithm algo, const AMatrix& A, const bool Amode, const BMatrix& B,
+               const bool Bmode) {
   // Canonicalize the matrix types:
   //  - Make A,B have const values and entries.
   //  - Make all views in A,B unmanaged, but otherwise default memory traits
@@ -214,9 +202,33 @@ CMatrix spgemm(const AMatrix& A, const bool Amode, const BMatrix& B, const bool 
     typename CMatrix::values_type valuesC;
     return CMatrix("C", Crows, Ccols, 0, valuesC, row_mapC, entriesC);
   }
-  return CMatrix(
-      KokkosSparse::Impl::SPGEMM_NOREUSE<CMatrix_Internal, AMatrix_Internal, BMatrix_Internal>::spgemm_noreuse(
-          A_internal, Amode, B_internal, Bmode));
+  if (Impl::is_spgemm_algorithm_native(algo)) {
+    return CMatrix(
+        KokkosSparse::Impl::SPGEMM_NOREUSE<CMatrix_Internal, AMatrix_Internal, BMatrix_Internal, false>::spgemm_noreuse(
+            algo, A_internal, Amode, B_internal, Bmode));
+  } else {
+    return CMatrix(
+        KokkosSparse::Impl::SPGEMM_NOREUSE<CMatrix_Internal, AMatrix_Internal, BMatrix_Internal>::spgemm_noreuse(
+            algo, A_internal, Amode, B_internal, Bmode));
+  }
+}
+
+///
+/// @brief
+///
+/// @tparam CMatrix Result matrix type.
+/// @tparam AMatrix Left input matrix type.
+/// @tparam BMatrix Right input matrix type.
+/// @param A Left input matrix.
+/// @param Amode Whether to transpose A (only Amode == false is currently supported)
+/// @param B Right input matrix.
+/// @param Bmode Whether to transpose B (only Bmode == false is currently supported)
+/// @param algo Algorithm option to use.
+/// @return CMatrix Product A*B.
+///
+template <class CMatrix, class AMatrix, class BMatrix>
+CMatrix spgemm(const AMatrix& A, const bool Amode, const BMatrix& B, const bool Bmode) {
+  return spgemm<CMatrix, AMatrix, BMatrix>(KokkosSparse::SPGEMM_DEFAULT, A, Amode, B, Bmode);
 }
 
 }  // namespace KokkosSparse

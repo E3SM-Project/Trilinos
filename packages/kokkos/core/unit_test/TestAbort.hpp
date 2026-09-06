@@ -1,27 +1,17 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #include <gtest/gtest.h>
 
 #include <regex>
+#include <Kokkos_Macros.hpp>
+#ifdef KOKKOS_ENABLE_EXPERIMENTAL_CXX20_MODULES
+import kokkos.core;
+#else
 #include <Kokkos_Core.hpp>
+#endif
 
 TEST(TEST_CATEGORY_DEATH, abort_from_host) {
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
-
   char msg[] = "Goodbye cruel world";
   EXPECT_DEATH({ Kokkos::abort(msg); }, msg);
 }
@@ -74,20 +64,14 @@ struct TestAbortCausingAbnormalProgramTerminationAndPrinting {
 
 template <class ExecutionSpace>
 void test_abort_from_device() {
-#if defined(KOKKOS_ENABLE_OPENMPTARGET)  // FIXME_OPENMPTARGET
-  if (std::is_same<ExecutionSpace, Kokkos::Experimental::OpenMPTarget>::value) {
-    TestAbortPrintingToStdout<ExecutionSpace>();
-  } else {
-    TestAbortCausingAbnormalProgramTerminationAndPrinting<ExecutionSpace>();
-  }
-#elif defined(KOKKOS_ENABLE_OPENACC)  // FIXME_OPENACC
+#if defined(KOKKOS_ENABLE_OPENACC)  // FIXME_OPENACC
   if (std::is_same<ExecutionSpace, Kokkos::Experimental::OpenACC>::value) {
     TestAbortPrintingToStdout<ExecutionSpace>();
   } else {
     TestAbortCausingAbnormalProgramTerminationAndPrinting<ExecutionSpace>();
   }
-#elif defined(KOKKOS_ENABLE_SYCL)     // FIXME_SYCL
-  if (std::is_same<ExecutionSpace, Kokkos::SYCL>::value) {
+#elif defined(KOKKOS_ENABLE_SYCL)  // FIXME_SYCL
+  if (std::is_same_v<ExecutionSpace, Kokkos::SYCL>) {
 #ifdef NDEBUG
     TestAbortPrintingToStdout<ExecutionSpace>();
 #else
@@ -102,7 +86,7 @@ void test_abort_from_device() {
 }
 
 TEST(TEST_CATEGORY_DEATH, abort_from_device) {
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
 // FIXME_OPENACC FIXME_NVHPC: NVHPC fails when targetting CPUs.
 #if defined(KOKKOS_ENABLE_OPENACC) && defined(KOKKOS_COMPILER_NVHPC) && \
     defined(KOKKOS_ENABLE_OPENACC_FORCE_HOST_AS_DEVICE)
@@ -110,6 +94,14 @@ TEST(TEST_CATEGORY_DEATH, abort_from_device) {
     GTEST_SKIP()
         << "skipping since the OpenACC backend compiled by NVHPC for CPU "
            "crashes at runtime.";
+  }
+#endif
+
+#if defined(KOKKOS_ENABLE_IMPL_SYCL_OUT_OF_ORDER_QUEUES) && \
+    !defined(NDEBUG)  // FIXME_SYCL
+  if (std::is_same_v<TEST_EXECSPACE, Kokkos::SYCL>) {
+    GTEST_SKIP() << "skipping since the SYCL backend with out-of-order queues "
+                    "fails to die.";
   }
 #endif
   test_abort_from_device<TEST_EXECSPACE>();
