@@ -1,107 +1,56 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #ifndef KOKKOSBATCHED_GEMM_TEAMVECTOR_IMPL_HPP
 #define KOKKOSBATCHED_GEMM_TEAMVECTOR_IMPL_HPP
 
 /// \author Kyungjoo Kim (kyukim@sandia.gov)
+/// \author Yuuichi Asahi (yuuichi.asahi@cea.fr)
 
+#include "KokkosBlas_util.hpp"
 #include "KokkosBatched_Util.hpp"
+#include "KokkosBatched_Gemm_Common_Impl.hpp"
 #include "KokkosBatched_Gemm_TeamVector_Internal.hpp"
 
 namespace KokkosBatched {
 
 ///
-/// Team Impl
-/// =========
+/// TeamVector Impl
+/// ===============
 
-///
-/// Implemented:
-/// NT/NT, T/NT, NT/T, T/T
-///
-/// Not yet implemented (ConjTranspose)
-/// CT/NT, NT/CT, CT/CT
-///
+template <typename MemberType, typename ArgTransA, typename ArgTransB, typename ArgAlgo>
+template <typename ScalarType, typename AViewType, typename BViewType, typename CViewType>
+KOKKOS_INLINE_FUNCTION int TeamVectorGemm<MemberType, ArgTransA, ArgTransB, ArgAlgo>::invoke(
+    const MemberType &member, const ScalarType alpha, const AViewType &A, const BViewType &B, const ScalarType beta,
+    const CViewType &C) {
+  const int k = std::same_as<ArgTransA, Trans::NoTranspose> ? Impl::get_extent_int(A, 1) : Impl::get_extent_int(A, 0);
+  const int m = Impl::get_extent_int(C, 0), n = Impl::get_extent_int(C, 1);
 
-///
-/// NT/NT
-///
+  // Quick return if possible
+  if (m == 0 || n == 0 || ((alpha == ScalarType(0) || k == 0) && beta == ScalarType(1))) return 0;
 
-template <typename MemberType>
-struct TeamVectorGemm<MemberType, Trans::NoTranspose, Trans::NoTranspose, Algo::Gemm::Unblocked> {
-  template <typename ScalarType, typename AViewType, typename BViewType, typename CViewType>
-  KOKKOS_INLINE_FUNCTION static int invoke(const MemberType &member, const ScalarType alpha, const AViewType &A,
-                                           const BViewType &B, const ScalarType beta, const CViewType &C) {
-    // C = beta C + alpha A B
-    // C (m x n), A(m x k), B(k x n)
-    return TeamVectorGemmInternal<Algo::Gemm::Unblocked>::invoke(
-        member, C.extent(0), C.extent(1), A.extent(1), alpha, A.data(), A.stride_0(), A.stride_1(), B.data(),
-        B.stride_0(), B.stride_1(), beta, C.data(), C.stride_0(), C.stride_1());
-  }
-};
+  auto info = Impl::checkGemmInput<ArgTransA, ArgTransB>(A, B, C);
+  if (info) return info;
 
-///
-/// T/NT
-///
+  using opA = std::conditional_t<std::same_as<ArgTransA, Trans::ConjTranspose>, KokkosBlas::Impl::OpConj,
+                                 KokkosBlas::Impl::OpID>;
+  using opB = std::conditional_t<std::same_as<ArgTransB, Trans::ConjTranspose>, KokkosBlas::Impl::OpConj,
+                                 KokkosBlas::Impl::OpID>;
 
-template <typename MemberType>
-struct TeamVectorGemm<MemberType, Trans::Transpose, Trans::NoTranspose, Algo::Gemm::Unblocked> {
-  template <typename ScalarType, typename AViewType, typename BViewType, typename CViewType>
-  KOKKOS_INLINE_FUNCTION static int invoke(const MemberType &member, const ScalarType alpha, const AViewType &A,
-                                           const BViewType &B, const ScalarType beta, const CViewType &C) {
-    // C = beta C + alpha A B
-    // C (m x n), A(m x k), B(k x n)
-    return TeamVectorGemmInternal<Algo::Gemm::Unblocked>::invoke(
-        member, C.extent(0), C.extent(1), A.extent(0), alpha, A.data(), A.stride_1(), A.stride_0(), B.data(),
-        B.stride_0(), B.stride_1(), beta, C.data(), C.stride_0(), C.stride_1());
-  }
-};
+  const std::size_t A_stride_0 =
+      std::same_as<ArgTransA, Trans::NoTranspose> ? Impl::get_stride(A, 0) : Impl::get_stride(A, 1);
+  const std::size_t A_stride_1 =
+      std::same_as<ArgTransA, Trans::NoTranspose> ? Impl::get_stride(A, 1) : Impl::get_stride(A, 0);
+  const std::size_t B_stride_0 =
+      std::same_as<ArgTransB, Trans::NoTranspose> ? Impl::get_stride(B, 0) : Impl::get_stride(B, 1);
+  const std::size_t B_stride_1 =
+      std::same_as<ArgTransB, Trans::NoTranspose> ? Impl::get_stride(B, 1) : Impl::get_stride(B, 0);
+  const std::size_t C_stride_0 = Impl::get_stride(C, 0), C_stride_1 = Impl::get_stride(C, 1);
 
-///
-/// NT/T
-///
-
-template <typename MemberType>
-struct TeamVectorGemm<MemberType, Trans::NoTranspose, Trans::Transpose, Algo::Gemm::Unblocked> {
-  template <typename ScalarType, typename AViewType, typename BViewType, typename CViewType>
-  KOKKOS_INLINE_FUNCTION static int invoke(const MemberType &member, const ScalarType alpha, const AViewType &A,
-                                           const BViewType &B, const ScalarType beta, const CViewType &C) {
-    // C = beta C + alpha A B
-    // C (m x n), A(m x k), B(k x n)
-    return TeamVectorGemmInternal<Algo::Gemm::Unblocked>::invoke(
-        member, C.extent(0), C.extent(1), A.extent(1), alpha, A.data(), A.stride_0(), A.stride_1(), B.data(),
-        B.stride_1(), B.stride_0(), beta, C.data(), C.stride_0(), C.stride_1());
-  }
-};
-
-///
-/// T/T
-///
-
-template <typename MemberType>
-struct TeamVectorGemm<MemberType, Trans::Transpose, Trans::Transpose, Algo::Gemm::Unblocked> {
-  template <typename ScalarType, typename AViewType, typename BViewType, typename CViewType>
-  KOKKOS_INLINE_FUNCTION static int invoke(const MemberType &member, const ScalarType alpha, const AViewType &A,
-                                           const BViewType &B, const ScalarType beta, const CViewType &C) {
-    // C = beta C + alpha A B
-    // C (m x n), A(m x k), B(k x n)
-    return TeamVectorGemmInternal<Algo::Gemm::Unblocked>::invoke(
-        member, C.extent(0), C.extent(1), A.extent(0), alpha, A.data(), A.stride_1(), A.stride_0(), B.data(),
-        B.stride_1(), B.stride_0(), beta, C.data(), C.stride_0(), C.stride_1());
-  }
-};
+  // C = beta C + alpha op(A) op(B)
+  return Impl::TeamVectorGemmInternal<ArgAlgo>::invoke(member, opA(), opB(), m, n, k, alpha, A.data(), A_stride_0,
+                                                       A_stride_1, B.data(), B_stride_0, B_stride_1, beta, C.data(),
+                                                       C_stride_0, C_stride_1);
+}
 
 }  // namespace KokkosBatched
 

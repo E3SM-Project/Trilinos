@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #if defined(KOKKOS_ENABLE_OPENMP)
 #ifdef KOKKOSKERNELS_HAVE_OUTER
@@ -498,19 +485,13 @@ void KokkosSPGEMM<HandleType, a_row_view_t_, a_lno_nnz_view_t_, a_scalar_nnz_vie
   ////////////////////////////////////////
   timer1.reset();
   typedef Kokkos::View<size_t *, mySlowMemory> size_t_view_t;
-  size_t_view_t flop_per_row(Kokkos::view_alloc(Kokkos::WithoutInitializing, "flops per row"), b_row_cnt);
+  size_t_view_t flop_per_row(Kokkos::view_alloc(Kokkos::WithoutInitializing, "flops per row"), b_row_cnt + 1);
   FlopsPerRowOuter<row_lno_temp_work_view_t, const_b_lno_row_view_t, size_t_view_t> fpr(b_row_cnt, transpose_col_xadj,
                                                                                         row_mapB, flop_per_row);
   Kokkos::parallel_for(Kokkos::RangePolicy<MyExecSpace>(0, b_row_cnt), fpr);
-  MyExecSpace().fence();
 
-  KokkosKernels::Impl::exclusive_parallel_prefix_sum<size_t_view_t, MyExecSpace>(b_row_cnt + 1, flop_per_row);
-
-  auto num_flops   = Kokkos::subview(flop_per_row, b_row_cnt);
-  auto h_num_flops = Kokkos::create_mirror_view(num_flops);
-  Kokkos::deep_copy(h_num_flops, num_flops);
-  MyExecSpace().fence();
-  size_t num_required_flops = h_num_flops();
+  size_t num_required_flops;
+  KokkosKernels::exclusive_parallel_prefix_sum(MyExecSpace(), flop_per_row, num_required_flops);
 
   if (KOKKOSKERNELS_VERBOSE) {
     std::cout << timer1.seconds() << " ";

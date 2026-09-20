@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOSGRAPH_EXPLICIT_COARSEN_IMPL_HPP
 #define KOKKOSGRAPH_EXPLICIT_COARSEN_IMPL_HPP
@@ -226,7 +213,7 @@ struct ExplicitGraphCoarsening {
     clusterOffsets = ordinal_view_t("Cluster offsets", numCoarseVerts + 1);
     clusterVerts   = ordinal_view_t(Kokkos::view_alloc(Kokkos::WithoutInitializing, "Cluster verts"), numFineVerts);
     Kokkos::parallel_for(range_pol(0, numFineVerts), ClusterSizeFunctor(clusterOffsets, labels));
-    KokkosKernels::Impl::exclusive_parallel_prefix_sum<ordinal_view_t, exec_space>(numCoarseVerts + 1, clusterOffsets);
+    KokkosKernels::exclusive_parallel_prefix_sum(exec_space(), clusterOffsets);
     {
       ordinal_view_t tempInsertCounts("Temporary cluster insert counts", numCoarseVerts);
       Kokkos::parallel_for(range_pol(0, numFineVerts),
@@ -236,6 +223,7 @@ struct ExplicitGraphCoarsening {
     // distinct clusters
     int vectorSize = KokkosKernels::Impl::kk_get_suggested_vector_size(
         numFineVerts, fineEntries.extent(0), KokkosKernels::Impl::kk_get_exec_space_type<exec_space>());
+    vectorSize = (vectorSize < team_pol::vector_length_max() ? vectorSize : team_pol::vector_length_max());
     bitset_t crossClusterEdgeMask(fineEntries.extent(0));
     size_type numClusterEdges;
     {

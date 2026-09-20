@@ -1,26 +1,16 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_UNITTEST_MDSPAN_HPP
 #define KOKKOS_UNITTEST_MDSPAN_HPP
 
+#include <Kokkos_Macros.hpp>
+#ifdef KOKKOS_ENABLE_EXPERIMENTAL_CXX20_MODULES
+import kokkos.core;
+#else
 #include <Kokkos_Core.hpp>
+#endif
 #include <gtest/gtest.h>
-
-#ifdef KOKKOS_ENABLE_IMPL_MDSPAN
 
 namespace {
 void test_mdspan_minimal_functional() {
@@ -38,7 +28,7 @@ void test_mdspan_minimal_functional() {
 #if !defined(KOKKOS_ENABLE_OPENACC)
         Kokkos::mdspan<int, Kokkos::dextents<int, 1>> b_mds(a.data(), N);
 #endif
-#if !defined(KOKKOS_ENABLE_CXX17) && !defined(KOKKOS_ENABLE_CXX20)
+#if !defined(KOKKOS_ENABLE_CXX20)
         if (a_mds[i] != i) err++;
 #if !defined(KOKKOS_ENABLE_OPENACC)
         if (b_mds[i] != i) err++;
@@ -59,13 +49,14 @@ void test_mdspan_minimal_functional() {
 namespace {
 
 TEST(TEST_CATEGORY, mdspan_minimal_functional) {
-#ifndef KOKKOS_ENABLE_IMPL_MDSPAN
-  GTEST_SKIP() << "mdspan not enabled";
+#if defined(KOKKOS_ENABLE_OPENACC) && (KOKKOS_COMPILER_NVHPC > 240500) && \
+    (KOKKOS_COMPILER_NVHPC <= 260500)
+  // FIXME_OPENACC: Test is known to fail for 24.5 < NVHPC version <= 26.5.
+  GTEST_SKIP() << "skipping since the OpenACC backend fails to compile this "
+                  "test if 24.5 < NVHPC version <= 26.5";
 #else
   test_mdspan_minimal_functional();
 #endif
 }
 
 }  // namespace
-
-#endif

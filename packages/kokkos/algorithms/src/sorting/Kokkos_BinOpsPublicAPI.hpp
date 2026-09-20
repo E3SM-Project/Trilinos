@@ -1,23 +1,11 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_BIN_OPS_PUBLIC_API_HPP_
 #define KOKKOS_BIN_OPS_PUBLIC_API_HPP_
 
 #include <Kokkos_Macros.hpp>
+#include <cstdint>
 #include <type_traits>
 
 namespace Kokkos {
@@ -28,11 +16,7 @@ struct BinOp1D {
   double mul_   = {};
   double min_   = {};
 
-#ifdef KOKKOS_ENABLE_DEPRECATED_CODE_4
-  KOKKOS_DEPRECATED BinOp1D() = default;
-#else
   BinOp1D() = delete;
-#endif
 
   // Construct BinOp with number of bins, minimum value and maximum value
   BinOp1D(int max_bins, typename KeyViewType::const_value_type min,
@@ -45,7 +29,7 @@ struct BinOp1D {
     // For integral types the number of bins may be larger than the range
     // in which case we can exactly have one unique value per bin
     // and then don't need to sort bins.
-    if (std::is_integral<typename KeyViewType::const_value_type>::value &&
+    if (std::is_integral_v<typename KeyViewType::const_value_type> &&
         (static_cast<double>(max) - static_cast<double>(min)) <=
             static_cast<double>(max_bins)) {
       mul_ = 1.;
@@ -54,7 +38,7 @@ struct BinOp1D {
 
   // Determine bin index from key value
   template <class ViewType>
-  KOKKOS_INLINE_FUNCTION int bin(ViewType& keys, const int& i) const {
+  KOKKOS_INLINE_FUNCTION int bin(ViewType& keys, const int64_t& i) const {
     return static_cast<int>(mul_ * (static_cast<double>(keys(i)) - min_));
   }
 
@@ -76,11 +60,7 @@ struct BinOp3D {
   double mul_[3]   = {};
   double min_[3]   = {};
 
-#ifdef KOKKOS_ENABLE_DEPRECATED_CODE_4
-  KOKKOS_DEPRECATED BinOp3D() = default;
-#else
   BinOp3D() = delete;
-#endif
 
   BinOp3D(int max_bins[], typename KeyViewType::const_value_type min[],
           typename KeyViewType::const_value_type max[]) {
@@ -99,7 +79,7 @@ struct BinOp3D {
   }
 
   template <class ViewType>
-  KOKKOS_INLINE_FUNCTION int bin(ViewType& keys, const int& i) const {
+  KOKKOS_INLINE_FUNCTION int bin(ViewType& keys, const int64_t& i) const {
     return int((((int(mul_[0] * (keys(i, 0) - min_[0])) * max_bins_[1]) +
                  int(mul_[1] * (keys(i, 1) - min_[1]))) *
                 max_bins_[2]) +

@@ -1,27 +1,24 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_SORT_FREE_FUNCS_IMPL_HPP_
 #define KOKKOS_SORT_FREE_FUNCS_IMPL_HPP_
 
 #include "../Kokkos_BinOpsPublicAPI.hpp"
 #include "../Kokkos_BinSortPublicAPI.hpp"
-#include <std_algorithms/Kokkos_BeginEnd.hpp>
+#include <Kokkos_Iterator.hpp>
 #include <std_algorithms/Kokkos_Copy.hpp>
+#include <Kokkos_Macros.hpp>
+#include <std_algorithms/impl/Kokkos_HelperPredicates.hpp>
+#ifdef KOKKOS_ENABLE_EXPERIMENTAL_CXX20_MODULES
+import kokkos.core;
+#else
 #include <Kokkos_Core.hpp>
+#endif
+#include <Kokkos_Assert.hpp>
+
+#include <cmath>
+#include <cstdint>
 
 #if defined(KOKKOS_ENABLE_CUDA)
 
@@ -36,42 +33,49 @@
 #pragma GCC diagnostic ignored "-Wshadow"
 #pragma GCC diagnostic ignored "-Wsuggest-override"
 
-#if defined(KOKKOS_COMPILER_CLANG)
-// Some versions of Clang fail to compile Thrust, failing with errors like
-// this:
-//    <snip>/thrust/system/cuda/detail/core/agent_launcher.h:557:11:
-//    error: use of undeclared identifier 'va_printf'
-// The exact combination of versions for Clang and Thrust (or CUDA) for this
-// failure was not investigated, however even very recent version combination
-// (Clang 10.0.0 and Cuda 10.0) demonstrated failure.
-//
-// Defining _CubLog here locally allows us to avoid that code path, however
-// disabling some debugging diagnostics
-#pragma push_macro("_CubLog")
-#ifdef _CubLog
-#undef _CubLog
-#endif
-#define _CubLog
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
-#pragma pop_macro("_CubLog")
-#else
-#include <thrust/device_ptr.h>
-#include <thrust/sort.h>
-#endif
 
 #pragma GCC diagnostic pop
 
-#endif
+#elif defined(KOKKOS_ENABLE_ROCTHRUST)
 
-#if defined(KOKKOS_ENABLE_ROCTHRUST)
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
+
 #endif
 
 #if defined(KOKKOS_ENABLE_ONEDPL)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wshadow"
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wunused-local-typedef"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-variable"
 #include <oneapi/dpl/execution>
 #include <oneapi/dpl/algorithm>
+#pragma GCC diagnostic pop
+
+#define KOKKOS_IMPL_ONEDPL_VERSION                            \
+  ONEDPL_VERSION_MAJOR * 10000 + ONEDPL_VERSION_MINOR * 100 + \
+      ONEDPL_VERSION_PATCH
+#define KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL(MAJOR, MINOR, PATCH) \
+  (KOKKOS_IMPL_ONEDPL_VERSION >= ((MAJOR)*10000 + (MINOR)*100 + (PATCH)))
+
+namespace Kokkos::Impl {
+template <typename Comparator, typename ValueType>
+struct ComparatorWrapper {
+  Comparator comparator;
+  KOKKOS_FUNCTION bool operator()(const ValueType& i,
+                                  const ValueType& j) const {
+    return comparator(i, j);
+  }
+};
+}  // namespace Kokkos::Impl
+
+template <typename Comparator, typename ValueType>
+struct sycl::is_device_copyable<
+    Kokkos::Impl::ComparatorWrapper<Comparator, ValueType>> : std::true_type {};
 #endif
 
 namespace Kokkos {
@@ -114,7 +118,7 @@ struct min_max_functor {
   min_max_functor(const ViewType& view_) : view(view_) {}
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const size_t& i, minmax_scalar& minmax) const {
+  void operator()(const int64_t& i, minmax_scalar& minmax) const {
     if (view(i) < minmax.min_val) minmax.min_val = view(i);
     if (view(i) > minmax.max_val) minmax.max_val = view(i);
   }
@@ -136,10 +140,11 @@ void sort_via_binsort(const ExecutionSpace& exec,
 
   Kokkos::MinMaxScalar<typename ViewType::non_const_value_type> result;
   Kokkos::MinMax<typename ViewType::non_const_value_type> reducer(result);
-  parallel_reduce("Kokkos::Sort::FindExtent",
-                  Kokkos::RangePolicy<typename ViewType::execution_space>(
-                      exec, 0, view.extent(0)),
-                  min_max_functor<ViewType>(view), reducer);
+  parallel_reduce(
+      "Kokkos::Sort::FindExtent",
+      Kokkos::RangePolicy<typename ViewType::execution_space,
+                          Kokkos::IndexType<int64_t>>(exec, 0, view.extent(0)),
+      min_max_functor<ViewType>(view), reducer);
   if (result.min_val == result.max_val) return;
   // For integral types the number of bins may be larger than the range
   // in which case we can exactly have one unique value per bin
@@ -221,6 +226,10 @@ void sort_onedpl(const Kokkos::SYCL& space,
                 "SYCL execution space is not able to access the memory space "
                 "of the View argument!");
 
+#if KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL(2022, 8, 0)
+  static_assert(ViewType::rank == 1,
+                "Kokkos::sort currently only supports rank-1 Views.");
+#else
   static_assert(
       (ViewType::rank == 1) &&
           (std::is_same_v<typename ViewType::array_layout, LayoutRight> ||
@@ -234,18 +243,37 @@ void sort_onedpl(const Kokkos::SYCL& space,
   if (view.stride(0) != 1) {
     Kokkos::abort("SYCL sort only supports rank-1 Views with stride(0) = 1.");
   }
+#endif
 
   if (view.extent(0) <= 1) {
     return;
   }
 
-  // Can't use Experimental::begin/end here since the oneDPL then assumes that
-  // the data is on the host.
   auto queue  = space.sycl_queue();
   auto policy = oneapi::dpl::execution::make_device_policy(queue);
-  const int n = view.extent(0);
-  oneapi::dpl::sort(policy, view.data(), view.data() + n,
-                    std::forward<MaybeComparator>(maybeComparator)...);
+
+#if KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL(2022, 8, 0)
+  auto view_begin = ::Kokkos::Experimental::begin(view);
+  auto view_end   = ::Kokkos::Experimental::end(view);
+#else
+  // Can't use Experimental::begin/end here since the oneDPL then assumes that
+  // the data is on the host.
+  const int n     = view.extent(0);
+  auto view_begin = view.data();
+  auto view_end   = view.data() + n;
+#endif
+
+  if constexpr (sizeof...(MaybeComparator) == 0)
+    oneapi::dpl::sort(policy, view_begin, view_end);
+  else {
+    using value_type =
+        typename Kokkos::View<DataType, Properties...>::value_type;
+    auto comparator =
+        std::get<0>(std::tuple<MaybeComparator...>(maybeComparator...));
+    oneapi::dpl::sort(
+        policy, view_begin, view_end,
+        ComparatorWrapper<decltype(comparator), value_type>{comparator});
+  }
 }
 #endif
 
@@ -269,84 +297,21 @@ void copy_to_host_run_stdsort_copy_back(
     KE::copy(exec, view, view_dc);
 
     // run sort on the mirror of view_dc
-    auto mv_h = create_mirror_view_and_copy(Kokkos::HostSpace(), view_dc);
-    if (view.span_is_contiguous()) {
-      std::sort(mv_h.data(), mv_h.data() + mv_h.size(),
-                std::forward<MaybeComparator>(maybeComparator)...);
-    } else {
-      auto first = KE::begin(mv_h);
-      auto last  = KE::end(mv_h);
-      std::sort(first, last, std::forward<MaybeComparator>(maybeComparator)...);
-    }
+    auto mv_h  = create_mirror_view_and_copy(Kokkos::HostSpace(), view_dc);
+    auto first = KE::begin(mv_h);
+    auto last  = KE::end(mv_h);
+    std::sort(first, last, std::forward<MaybeComparator>(maybeComparator)...);
     Kokkos::deep_copy(exec, view_dc, mv_h);
 
     // copy back to argument view
     KE::copy(exec, KE::cbegin(view_dc), KE::cend(view_dc), KE::begin(view));
   } else {
     auto view_h = create_mirror_view_and_copy(Kokkos::HostSpace(), view);
-    if (view.span_is_contiguous()) {
-      std::sort(view_h.data(), view_h.data() + view_h.size(),
-                std::forward<MaybeComparator>(maybeComparator)...);
-    } else {
-      auto first = KE::begin(view_h);
-      auto last  = KE::end(view_h);
-      std::sort(first, last, std::forward<MaybeComparator>(maybeComparator)...);
-    }
+    auto first  = KE::begin(view_h);
+    auto last   = KE::end(view_h);
+    std::sort(first, last, std::forward<MaybeComparator>(maybeComparator)...);
     Kokkos::deep_copy(exec, view, view_h);
   }
-}
-
-// --------------------------------------------------
-//
-// specialize cases for sorting without comparator
-//
-// --------------------------------------------------
-
-#if defined(KOKKOS_ENABLE_CUDA)
-template <class DataType, class... Properties>
-void sort_device_view_without_comparator(
-    const Cuda& exec, const Kokkos::View<DataType, Properties...>& view) {
-  sort_cudathrust(exec, view);
-}
-#endif
-
-#if defined(KOKKOS_ENABLE_ROCTHRUST)
-template <class DataType, class... Properties>
-void sort_device_view_without_comparator(
-    const HIP& exec, const Kokkos::View<DataType, Properties...>& view) {
-  sort_rocthrust(exec, view);
-}
-#endif
-
-#if defined(KOKKOS_ENABLE_ONEDPL)
-template <class DataType, class... Properties>
-void sort_device_view_without_comparator(
-    const Kokkos::SYCL& exec,
-    const Kokkos::View<DataType, Properties...>& view) {
-  using ViewType = Kokkos::View<DataType, Properties...>;
-  static_assert(
-      (ViewType::rank == 1) &&
-          (std::is_same_v<typename ViewType::array_layout, LayoutRight> ||
-           std::is_same_v<typename ViewType::array_layout, LayoutLeft> ||
-           std::is_same_v<typename ViewType::array_layout, LayoutStride>),
-      "sort_device_view_without_comparator: supports rank-1 Views "
-      "with LayoutLeft, LayoutRight or LayoutStride");
-
-  if (view.stride(0) == 1) {
-    sort_onedpl(exec, view);
-  } else {
-    copy_to_host_run_stdsort_copy_back(exec, view);
-  }
-}
-#endif
-
-// fallback case
-template <class ExecutionSpace, class DataType, class... Properties>
-std::enable_if_t<Kokkos::is_execution_space<ExecutionSpace>::value>
-sort_device_view_without_comparator(
-    const ExecutionSpace& exec,
-    const Kokkos::View<DataType, Properties...>& view) {
-  sort_via_binsort(exec, view);
 }
 
 // --------------------------------------------------
@@ -387,11 +352,15 @@ void sort_device_view_with_comparator(
       "sort_device_view_with_comparator: supports rank-1 Views "
       "with LayoutLeft, LayoutRight or LayoutStride");
 
+#if KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL(2022, 8, 0)
+  sort_onedpl(exec, view, comparator);
+#else
   if (view.stride(0) == 1) {
     sort_onedpl(exec, view, comparator);
   } else {
     copy_to_host_run_stdsort_copy_back(exec, view, comparator);
   }
+#endif
 }
 #endif
 
@@ -421,6 +390,75 @@ sort_device_view_with_comparator(
   copy_to_host_run_stdsort_copy_back(exec, view, comparator);
 }
 
+// --------------------------------------------------
+//
+// specialize cases for sorting without comparator
+//
+// --------------------------------------------------
+
+#if defined(KOKKOS_ENABLE_CUDA)
+template <class DataType, class... Properties>
+void sort_device_view_without_comparator(
+    const Cuda& exec, const Kokkos::View<DataType, Properties...>& view) {
+  sort_cudathrust(exec, view);
+}
+#endif
+
+#if defined(KOKKOS_ENABLE_ROCTHRUST)
+template <class DataType, class... Properties>
+void sort_device_view_without_comparator(
+    const HIP& exec, const Kokkos::View<DataType, Properties...>& view) {
+  sort_rocthrust(exec, view);
+}
+#endif
+
+#if defined(KOKKOS_ENABLE_ONEDPL)
+template <class DataType, class... Properties>
+void sort_device_view_without_comparator(
+    const Kokkos::SYCL& exec,
+    const Kokkos::View<DataType, Properties...>& view) {
+  using ViewType = Kokkos::View<DataType, Properties...>;
+  static_assert(
+      (ViewType::rank == 1) &&
+          (std::is_same_v<typename ViewType::array_layout, LayoutRight> ||
+           std::is_same_v<typename ViewType::array_layout, LayoutLeft> ||
+           std::is_same_v<typename ViewType::array_layout, LayoutStride>),
+      "sort_device_view_without_comparator: supports rank-1 Views "
+      "with LayoutLeft, LayoutRight or LayoutStride");
+
+#if KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL(2022, 8, 0)
+  sort_onedpl(exec, view);
+#else
+  if (view.stride(0) == 1) {
+    sort_onedpl(exec, view);
+  } else {
+    copy_to_host_run_stdsort_copy_back(exec, view);
+  }
+#endif
+}
+#endif
+
+// fallback case
+template <Kokkos::ExecutionSpace Exec, class DataType, class... Properties>
+void sort_device_view_without_comparator(
+    const Exec& exec, const Kokkos::View<DataType, Properties...>& view) {
+  using value_type =
+      typename Kokkos::View<DataType, Properties...>::non_const_value_type;
+  if constexpr (std::is_arithmetic_v<value_type>) {
+    sort_via_binsort(exec, view);
+  } else {
+    // BinSort requires the value type to be arithmetic. For other types,
+    // delegate to the comparator-based path using operator<, which uses
+    // an efficient TPL if possible and otherwise falls back to std::sort.
+    sort_device_view_with_comparator(
+        exec, view,
+        Experimental::Impl::StdAlgoLessThanBinaryPredicate<value_type>());
+  }
+}
+
 }  // namespace Impl
 }  // namespace Kokkos
+
+#undef KOKKOS_IMPL_ONEDPL_VERSION
+#undef KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL
 #endif

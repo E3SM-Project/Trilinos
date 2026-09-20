@@ -1,27 +1,18 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_STD_ALGORITHMS_SHIFT_LEFT_IMPL_HPP
 #define KOKKOS_STD_ALGORITHMS_SHIFT_LEFT_IMPL_HPP
 
+#include <Kokkos_Macros.hpp>
+#ifdef KOKKOS_ENABLE_EXPERIMENTAL_CXX20_MODULES
+import kokkos.core;
+#else
 #include <Kokkos_Core.hpp>
+#endif
 #include "Kokkos_Constraints.hpp"
 #include "Kokkos_HelperPredicates.hpp"
 #include <std_algorithms/Kokkos_Move.hpp>
-#include <std_algorithms/Kokkos_Distance.hpp>
 #include <string>
 
 namespace Kokkos {
@@ -88,15 +79,17 @@ IteratorType shift_left_exespace_impl(
   // step 1
   using step1_func_type =
       StdMoveFunctor<index_type, IteratorType, tmp_readwrite_iterator_type>;
-  ::Kokkos::parallel_for(
-      label, RangePolicy<ExecutionSpace>(ex, 0, num_elements_to_move),
-      step1_func_type(first + n, begin(tmp_view)));
+  ::Kokkos::parallel_for(label,
+                         RangePolicy<ExecutionSpace, IndexType<index_type>>(
+                             ex, 0, num_elements_to_move),
+                         step1_func_type(first + n, begin(tmp_view)));
 
   // step 2
   using step2_func_type =
       StdMoveFunctor<index_type, tmp_readwrite_iterator_type, IteratorType>;
   ::Kokkos::parallel_for(label,
-                         RangePolicy<ExecutionSpace>(ex, 0, tmp_view.extent(0)),
+                         RangePolicy<ExecutionSpace, IndexType<index_type>>(
+                             ex, 0, tmp_view.extent(0)),
                          step2_func_type(begin(tmp_view), first));
 
   ex.fence("Kokkos::shift_left: fence after operation");
