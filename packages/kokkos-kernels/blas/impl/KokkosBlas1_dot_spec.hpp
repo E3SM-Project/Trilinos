@@ -1,25 +1,12 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #ifndef KOKKOSBLAS1_IMPL_DOT_SPEC_HPP_
 #define KOKKOSBLAS1_IMPL_DOT_SPEC_HPP_
 
 #include <KokkosKernels_config.h>
 #include <Kokkos_Core.hpp>
-#include <Kokkos_ArithTraits.hpp>
-#include <Kokkos_InnerProductSpaceTraits.hpp>
+#include <KokkosKernels_ArithTraits.hpp>
+#include <KokkosKernels_InnerProductSpaceTraits.hpp>
 
 // Include the actual functors
 #if !defined(KOKKOSKERNELS_ETI_ONLY) || KOKKOSKERNELS_IMPL_COMPILE_LIBRARY
@@ -71,27 +58,20 @@ struct dot_eti_spec_avail {
 // the declarations of full specializations go in this header file.
 // We may spread out definitions (see _INST macro below) across one or
 // more .cpp files.
-#define KOKKOSBLAS1_DOT_ETI_SPEC_AVAIL(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                                         \
-  template <>                                                                                                         \
-  struct dot_eti_spec_avail<EXEC_SPACE,                                                                               \
-                            Kokkos::View<SCALAR, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, \
-                            Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                \
-                                         Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                    \
-                            Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                \
-                                         Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                    \
-                            1, 1> {                                                                                   \
-    enum : bool { value = true };                                                                                     \
-  };                                                                                                                  \
-  template <>                                                                                                         \
-  struct dot_eti_spec_avail<                                                                                          \
-      EXEC_SPACE,                                                                                                     \
-      Kokkos::View<SCALAR, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,   \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                          \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                          \
-      1, 1> {                                                                                                         \
-    enum : bool { value = true };                                                                                     \
+#define KOKKOSBLAS1_DOT_ETI_SPEC_AVAIL(SCALAR, LAYOUT, EXEC_SPACE)                                          \
+  template <>                                                                                               \
+  struct dot_eti_spec_avail<                                                                                \
+      EXEC_SPACE, Kokkos::View<SCALAR, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,             \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, 1, 1> {     \
+    enum : bool { value = true };                                                                           \
+  };                                                                                                        \
+  template <>                                                                                               \
+  struct dot_eti_spec_avail<                                                                                \
+      EXEC_SPACE, Kokkos::View<SCALAR, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,        \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,             \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, 1, 1> {     \
+    enum : bool { value = true };                                                                           \
   };
 
 //
@@ -101,42 +81,27 @@ struct dot_eti_spec_avail {
 // We may spread out definitions (see _DEF macro below) across one or
 // more .cpp files.
 //
-#define KOKKOSBLAS1_DOT_MV_ETI_SPEC_AVAIL(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                          \
-  template <>                                                                                             \
-  struct dot_eti_spec_avail<                                                                              \
-      EXEC_SPACE,                                                                                         \
-      Kokkos::View<SCALAR*, LAYOUT, Kokkos::Device<Kokkos::DefaultHostExecutionSpace, Kokkos::HostSpace>, \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      2, 2> {                                                                                             \
-    enum : bool { value = true };                                                                         \
-  };                                                                                                      \
-  template <>                                                                                             \
-  struct dot_eti_spec_avail<                                                                              \
-      EXEC_SPACE,                                                                                         \
-      Kokkos::View<SCALAR*, LAYOUT, Kokkos::Device<Kokkos::DefaultHostExecutionSpace, Kokkos::HostSpace>, \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      2, 1> {                                                                                             \
-    enum : bool { value = true };                                                                         \
-  };                                                                                                      \
-  template <>                                                                                             \
-  struct dot_eti_spec_avail<                                                                              \
-      EXEC_SPACE,                                                                                         \
-      Kokkos::View<SCALAR*, LAYOUT, Kokkos::Device<Kokkos::DefaultHostExecutionSpace, Kokkos::HostSpace>, \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      1, 2> {                                                                                             \
-    enum : bool { value = true };                                                                         \
+#define KOKKOSBLAS1_DOT_MV_ETI_SPEC_AVAIL(SCALAR, LAYOUT, EXEC_SPACE)                                        \
+  template <>                                                                                                \
+  struct dot_eti_spec_avail<                                                                                 \
+      EXEC_SPACE, Kokkos::View<SCALAR*, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,             \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, 2, 2> {     \
+    enum : bool { value = true };                                                                            \
+  };                                                                                                         \
+  template <>                                                                                                \
+  struct dot_eti_spec_avail<                                                                                 \
+      EXEC_SPACE, Kokkos::View<SCALAR*, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,             \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, 2, 1> {      \
+    enum : bool { value = true };                                                                            \
+  };                                                                                                         \
+  template <>                                                                                                \
+  struct dot_eti_spec_avail<                                                                                 \
+      EXEC_SPACE, Kokkos::View<SCALAR*, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,              \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, 1, 2> {     \
+    enum : bool { value = true };                                                                            \
   };
 
 // Include the actual specialization declarations
@@ -161,8 +126,9 @@ template <class execution_space, class RV, class XV, class YV,
 struct DotSpecialAccumulator {
   // Note: not doing the static_asserts to validate RV, XV, YV since those
   // errors would have already arisen when building the library.
-  using size_type  = typename YV::size_type;
-  using dot_type   = typename Kokkos::Details::InnerProductSpaceTraits<typename XV::non_const_value_type>::dot_type;
+  using size_type = typename YV::size_type;
+  using dot_type =
+      typename KokkosKernels::Details::InnerProductSpaceTraits<typename XV::non_const_value_type>::dot_type;
   using accum_type = typename DotAccumulatingScalar<dot_type>::type;
   // This is the same View type as RV, but using the special accumulator as the
   // value type
@@ -227,11 +193,11 @@ struct Dot<execution_space, RV, XV, YV, 1, 1, false, KOKKOSKERNELS_IMPL_COMPILE_
 
     if (numElems < static_cast<size_type>(INT_MAX)) {
       typedef int index_type;
-      DotFunctor<execution_space, RV, XV, YV, index_type> f(X, Y);
+      DotFunctor<RV, XV, YV, index_type> f{X, Y};
       f.run("KokkosBlas::dot<1D>", space, R);
     } else {
       typedef int64_t index_type;
-      DotFunctor<execution_space, RV, XV, YV, index_type> f(X, Y);
+      DotFunctor<RV, XV, YV, index_type> f{X, Y};
       f.run("KokkosBlas::dot<1D>", space, R);
     }
     Kokkos::Profiling::popRegion();
@@ -267,8 +233,9 @@ struct DotSpecialAccumulator<execution_space, RV, XV, YV, KOKKOSKERNELS_IMPL_COM
                 "It must be nonconst, because it is an output argument "
                 "(we have to be able to write to its entries).");
 
-  using size_type  = typename YV::size_type;
-  using dot_type   = typename Kokkos::Details::InnerProductSpaceTraits<typename XV::non_const_value_type>::dot_type;
+  using size_type = typename YV::size_type;
+  using dot_type =
+      typename KokkosKernels::Details::InnerProductSpaceTraits<typename XV::non_const_value_type>::dot_type;
   using accum_type = typename DotAccumulatingScalar<dot_type>::type;
   // This is the same View type as RV, but using the special accumulator as the
   // value type
@@ -289,11 +256,11 @@ struct DotSpecialAccumulator<execution_space, RV, XV, YV, KOKKOSKERNELS_IMPL_COM
 
     if (numElems < static_cast<size_type>(INT_MAX)) {
       typedef int index_type;
-      DotFunctor<execution_space, RV_Result, XV, YV, index_type> f(X, Y);
+      DotFunctor<RV_Result, XV, YV, index_type> f{X, Y};
       f.run("KokkosBlas::dot<1D>", space, R);
     } else {
       typedef int64_t index_type;
-      DotFunctor<execution_space, RV_Result, XV, YV, index_type> f(X, Y);
+      DotFunctor<RV_Result, XV, YV, index_type> f{X, Y};
       f.run("KokkosBlas::dot<1D>", space, R);
     }
     Kokkos::Profiling::popRegion();
@@ -341,17 +308,17 @@ struct Dot<execution_space, RV, XV, YV, X_Rank, Y_Rank, false, KOKKOSKERNELS_IMP
 
     const size_type numRows = X.extent(0);
     const size_type numDots = std::max(X.extent(1), Y.extent(1));
-    if (numDots == Kokkos::ArithTraits<size_type>::one()) {
+    if (numDots == KokkosKernels::ArithTraits<size_type>::one()) {
       auto R0 = Kokkos::subview(R, 0);
       auto X0 = getFirstColumn(X);
       auto Y0 = getFirstColumn(Y);
       if (numRows < static_cast<size_type>(INT_MAX)) {
         typedef int index_type;
-        DotFunctor<execution_space, decltype(R0), decltype(X0), decltype(Y0), index_type> f(X0, Y0);
+        DotFunctor<decltype(R0), decltype(X0), decltype(Y0), index_type> f{X0, Y0};
         f.run("KokkosBlas::dot<1D>", space, R0);
       } else {
         typedef int64_t index_type;
-        DotFunctor<execution_space, decltype(R0), decltype(X0), decltype(Y0), index_type> f(X0, Y0);
+        DotFunctor<decltype(R0), decltype(X0), decltype(Y0), index_type> f{X0, Y0};
         f.run("KokkosBlas::dot<1D>", space, R0);
       }
     } else {
@@ -378,71 +345,43 @@ struct Dot<execution_space, RV, XV, YV, X_Rank, Y_Rank, false, KOKKOSKERNELS_IMP
 // We may spread out definitions (see _DEF macro below) across one or
 // more .cpp files.
 //
-#define KOKKOSBLAS1_DOT_ETI_SPEC_DECL(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                                           \
-  extern template struct Dot<EXEC_SPACE,                                                                               \
-                             Kokkos::View<SCALAR, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, \
-                             Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                \
-                                          Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                    \
-                             Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                \
-                                          Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                    \
-                             1, 1, false, true>;                                                                       \
-  extern template struct Dot<                                                                                          \
-      EXEC_SPACE,                                                                                                      \
-      Kokkos::View<SCALAR, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,    \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                       \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                           \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                       \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                           \
-      1, 1, false, true>;                                                                                              \
-  extern template struct DotSpecialAccumulator<                                                                        \
-      EXEC_SPACE,                                                                                                      \
-      Kokkos::View<SCALAR, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,    \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                       \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                           \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                       \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                           \
-      true>;                                                                                                           \
-  extern template struct DotSpecialAccumulator<                                                                        \
-      EXEC_SPACE, Kokkos::View<SCALAR, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,            \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                       \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                           \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                       \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                           \
-      true>;
+#define KOKKOSBLAS1_DOT_ETI_SPEC_DECL(SCALAR, LAYOUT, EXEC_SPACE)                                                   \
+  extern template struct Dot<                                                                                       \
+      EXEC_SPACE, Kokkos::View<SCALAR, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,         \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                     \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, 1, 1, false, true>; \
+  extern template struct Dot<                                                                                       \
+      EXEC_SPACE, Kokkos::View<SCALAR, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                     \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, 1, 1, false, true>; \
+  extern template struct DotSpecialAccumulator<                                                                     \
+      EXEC_SPACE, Kokkos::View<SCALAR, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                     \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, true>;              \
+  extern template struct DotSpecialAccumulator<                                                                     \
+      EXEC_SPACE, Kokkos::View<SCALAR, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,         \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                     \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, true>;
 
 #include <generated_specializations_hpp/KokkosBlas1_dot_eti_spec_decl.hpp>
 
-#define KOKKOSBLAS1_DOT_ETI_SPEC_INST(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                                        \
-  template struct Dot<EXEC_SPACE,                                                                                   \
-                      Kokkos::View<SCALAR, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,     \
-                      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                    \
-                                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                        \
-                      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                    \
-                                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                        \
-                      1, 1, false, true>;                                                                           \
-  template struct Dot<                                                                                              \
-      EXEC_SPACE,                                                                                                   \
-      Kokkos::View<SCALAR, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                    \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                        \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                    \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                        \
-      1, 1, false, true>;                                                                                           \
-  template struct DotSpecialAccumulator<                                                                            \
-      EXEC_SPACE, Kokkos::View<SCALAR, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,         \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                    \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                        \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                    \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                        \
-      true>;                                                                                                        \
-  template struct DotSpecialAccumulator<                                                                            \
-      EXEC_SPACE,                                                                                                   \
-      Kokkos::View<SCALAR, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                    \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                        \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                    \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                        \
-      true>;
+#define KOKKOSBLAS1_DOT_ETI_SPEC_INST(SCALAR, LAYOUT, EXEC_SPACE)                                                     \
+  template struct Dot<                                                                                                \
+      EXEC_SPACE, Kokkos::View<SCALAR, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,           \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                       \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, 1, 1, false, true>;   \
+  template struct Dot<EXEC_SPACE, Kokkos::View<SCALAR, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,  \
+                      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,       \
+                      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, 1, 1, \
+                      false, true>;                                                                                   \
+  template struct DotSpecialAccumulator<                                                                              \
+      EXEC_SPACE, Kokkos::View<SCALAR, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,           \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                       \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, true>;                \
+  template struct DotSpecialAccumulator<                                                                              \
+      EXEC_SPACE, Kokkos::View<SCALAR, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                  \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                       \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, true>;
 
 //
 //
@@ -450,65 +389,35 @@ struct Dot<execution_space, RV, XV, YV, X_Rank, Y_Rank, false, KOKKOSKERNELS_IMP
 // KokkosBlas::Impl::Dot for rank == 2.  This is NOT for users!!!  We
 // use this macro in one or more .cpp files in this directory.
 //
-#define KOKKOSBLAS1_DOT_MV_ETI_SPEC_DECL(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                           \
-  extern template struct Dot<                                                                             \
-      EXEC_SPACE,                                                                                         \
-      Kokkos::View<SCALAR*, LAYOUT, Kokkos::Device<Kokkos::DefaultHostExecutionSpace, Kokkos::HostSpace>, \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      2, 2, false, true>;                                                                                 \
-  extern template struct Dot<                                                                             \
-      EXEC_SPACE,                                                                                         \
-      Kokkos::View<SCALAR*, LAYOUT, Kokkos::Device<Kokkos::DefaultHostExecutionSpace, Kokkos::HostSpace>, \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                          \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      2, 1, false, true>;                                                                                 \
-  extern template struct Dot<                                                                             \
-      EXEC_SPACE,                                                                                         \
-      Kokkos::View<SCALAR*, LAYOUT, Kokkos::Device<Kokkos::DefaultHostExecutionSpace, Kokkos::HostSpace>, \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                          \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      1, 2, false, true>;
+#define KOKKOSBLAS1_DOT_MV_ETI_SPEC_DECL(SCALAR, LAYOUT, EXEC_SPACE)                                                 \
+  extern template struct Dot<                                                                                        \
+      EXEC_SPACE, Kokkos::View<SCALAR*, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,         \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                     \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, 2, 2, false, true>; \
+  extern template struct Dot<                                                                                        \
+      EXEC_SPACE, Kokkos::View<SCALAR*, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,         \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                     \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, 2, 1, false, true>;  \
+  extern template struct Dot<                                                                                        \
+      EXEC_SPACE, Kokkos::View<SCALAR*, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,         \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                      \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, 1, 2, false, true>;
 
 #include <generated_specializations_hpp/KokkosBlas1_dot_mv_eti_spec_decl.hpp>
 
-#define KOKKOSBLAS1_DOT_MV_ETI_SPEC_INST(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                           \
-  template struct Dot<                                                                                    \
-      EXEC_SPACE,                                                                                         \
-      Kokkos::View<SCALAR*, LAYOUT, Kokkos::Device<Kokkos::DefaultHostExecutionSpace, Kokkos::HostSpace>, \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      2, 2, false, true>;                                                                                 \
-  template struct Dot<                                                                                    \
-      EXEC_SPACE,                                                                                         \
-      Kokkos::View<SCALAR*, LAYOUT, Kokkos::Device<Kokkos::DefaultHostExecutionSpace, Kokkos::HostSpace>, \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                          \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      2, 1, false, true>;                                                                                 \
-  template struct Dot<                                                                                    \
-      EXEC_SPACE,                                                                                         \
-      Kokkos::View<SCALAR*, LAYOUT, Kokkos::Device<Kokkos::DefaultHostExecutionSpace, Kokkos::HostSpace>, \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                          \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                              \
-      1, 2, false, true>;
+#define KOKKOSBLAS1_DOT_MV_ETI_SPEC_INST(SCALAR, LAYOUT, EXEC_SPACE)                                                 \
+  template struct Dot<                                                                                               \
+      EXEC_SPACE, Kokkos::View<SCALAR*, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,         \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                     \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, 2, 2, false, true>; \
+  template struct Dot<                                                                                               \
+      EXEC_SPACE, Kokkos::View<SCALAR*, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,         \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                     \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, 2, 1, false, true>;  \
+  template struct Dot<                                                                                               \
+      EXEC_SPACE, Kokkos::View<SCALAR*, LAYOUT, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,         \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                      \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged>>, 1, 2, false, true>;
 
 #include <KokkosBlas1_dot_tpl_spec_decl.hpp>
 

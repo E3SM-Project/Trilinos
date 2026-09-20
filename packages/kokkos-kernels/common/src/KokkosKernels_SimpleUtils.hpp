@@ -1,48 +1,18 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
-#ifndef _KOKKOSKERNELS_SIMPLEUTILS_HPP
-#define _KOKKOSKERNELS_SIMPLEUTILS_HPP
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
+#ifndef KOKKOSKERNELS_SIMPLEUTILS_HPP
+#define KOKKOSKERNELS_SIMPLEUTILS_HPP
 #include "Kokkos_Core.hpp"
-#include "Kokkos_ArithTraits.hpp"
+#include "KokkosKernels_ArithTraits.hpp"
 #include <type_traits>
 
 #define KOKKOSKERNELS_MACRO_MIN(x, y) ((x) < (y) ? (x) : (y))
 #define KOKKOSKERNELS_MACRO_MAX(x, y) ((x) < (y) ? (y) : (x))
-#define KOKKOSKERNELS_MACRO_ABS(x) Kokkos::ArithTraits<typename std::decay<decltype(x)>::type>::abs(x)
+#define KOKKOSKERNELS_MACRO_ABS(x) KokkosKernels::ArithTraits<typename std::decay<decltype(x)>::type>::abs(x)
 
 namespace KokkosKernels {
 
 namespace Impl {
-
-template <class ViewType>
-class SquareRootFunctor {
- public:
-  typedef typename ViewType::execution_space execution_space;
-  typedef typename ViewType::size_type size_type;
-
-  SquareRootFunctor(const ViewType &theView) : theView_(theView) {}
-
-  KOKKOS_INLINE_FUNCTION void operator()(const size_type i) const {
-    typedef typename ViewType::value_type value_type;
-    theView_(i) = Kokkos::ArithTraits<value_type>::sqrt(theView_(i));
-  }
-
- private:
-  ViewType theView_;
-};
 
 template <typename view_t>
 struct ExclusiveParallelPrefixSum {
@@ -74,92 +44,6 @@ struct InclusiveParallelPrefixSum {
     }
   }
 };
-
-/***
- * \brief Function performs the exclusive parallel prefix sum. That is each
- * entry holds the sum until itself.
- * \param exec: the execution space instance on which to run
- * \param num_elements: size of the array
- * \param arr: the array for which the prefix sum will be performed.
- */
-template <typename MyExecSpace, typename view_t>
-inline void kk_exclusive_parallel_prefix_sum(const MyExecSpace &exec, typename view_t::value_type num_elements,
-                                             view_t arr) {
-  typedef Kokkos::RangePolicy<MyExecSpace> my_exec_space;
-  Kokkos::parallel_scan("KokkosKernels::Common::PrefixSum", my_exec_space(exec, 0, num_elements),
-                        ExclusiveParallelPrefixSum<view_t>(arr));
-}
-
-/***
- * \brief Function performs the exclusive parallel prefix sum. That is each
- * entry holds the sum until itself.
- * \param num_elements: size of the array
- * \param arr: the array for which the prefix sum will be performed.
- */
-template <typename MyExecSpace, typename view_t>
-inline void kk_exclusive_parallel_prefix_sum(typename view_t::value_type num_elements, view_t arr) {
-  kk_exclusive_parallel_prefix_sum(MyExecSpace(), num_elements, arr);
-}
-
-/***
- * \brief Function performs the exclusive parallel prefix sum. That is each
- * entry holds the sum until itself. This version also returns the final sum
- * equivalent to the sum-reduction of arr before doing the scan.
- * \param exec: the execution space instance on which to run
- * \param num_elements: size of the array
- * \param arr: the array for which the prefix sum will be performed.
- * \param finalSum: will be set to arr[num_elements - 1] after computing the
- * prefix sum.
- */
-template <typename MyExecSpace, typename view_t>
-inline void kk_exclusive_parallel_prefix_sum(const MyExecSpace &exec, typename view_t::value_type num_elements,
-                                             view_t arr, typename view_t::non_const_value_type &finalSum) {
-  typedef Kokkos::RangePolicy<MyExecSpace> my_exec_space;
-  Kokkos::parallel_scan("KokkosKernels::Common::PrefixSum", my_exec_space(exec, 0, num_elements),
-                        ExclusiveParallelPrefixSum<view_t>(arr), finalSum);
-}
-
-/***
- * \brief Function performs the exclusive parallel prefix sum. That is each
- * entry holds the sum until itself. This version also returns the final sum
- * equivalent to the sum-reduction of arr before doing the scan.
- * \param num_elements: size of the array
- * \param arr: the array for which the prefix sum will be performed.
- * \param finalSum: will be set to arr[num_elements - 1] after computing the
- * prefix sum.
- */
-template <typename MyExecSpace, typename view_t>
-inline void kk_exclusive_parallel_prefix_sum(typename view_t::value_type num_elements, view_t arr,
-                                             typename view_t::non_const_value_type &finalSum) {
-  kk_exclusive_parallel_prefix_sum(MyExecSpace(), num_elements, arr, finalSum);
-}
-
-///
-/// \brief Function performs the inclusive parallel prefix sum. That is each
-///        entry holds the sum until itself including itself.
-/// \param my_exec_space: The execution space instance
-/// \param num_elements: size of the array
-/// \param arr: the array for which the prefix sum will be performed.
-///
-template <typename MyExecSpace, typename forward_array_type>
-void kk_inclusive_parallel_prefix_sum(MyExecSpace my_exec_space, typename forward_array_type::value_type num_elements,
-                                      forward_array_type arr) {
-  typedef Kokkos::RangePolicy<MyExecSpace> range_policy_t;
-  Kokkos::parallel_scan("KokkosKernels::Common::PrefixSum", range_policy_t(my_exec_space, 0, num_elements),
-                        InclusiveParallelPrefixSum<forward_array_type>(arr));
-}
-
-///
-/// \brief Function performs the inclusive parallel prefix sum. That is each
-///        entry holds the sum until itself including itself.
-/// \param num_elements: size of the array
-/// \param arr: the array for which the prefix sum will be performed.
-///
-template <typename MyExecSpace, typename forward_array_type>
-void kk_inclusive_parallel_prefix_sum(typename forward_array_type::value_type num_elements, forward_array_type arr) {
-  MyExecSpace my_exec_space;
-  return kk_inclusive_parallel_prefix_sum(my_exec_space, num_elements, arr);
-}
 
 template <typename view_t>
 struct ReductionFunctor {
@@ -237,7 +121,7 @@ inline void kk_reduce_view2(size_t num_elements, view_t arr, size_t &reduction) 
 }
 
 template <typename view_type1, typename view_type2,
-          typename eps_type = typename Kokkos::ArithTraits<typename view_type2::non_const_value_type>::mag_type>
+          typename eps_type = typename KokkosKernels::ArithTraits<typename view_type2::non_const_value_type>::mag_type>
 struct IsIdenticalFunctor {
   view_type1 view1;
   view_type2 view2;
@@ -248,7 +132,7 @@ struct IsIdenticalFunctor {
   KOKKOS_INLINE_FUNCTION
   void operator()(const size_t &i, size_t &is_equal) const {
     typedef typename view_type2::non_const_value_type val_type;
-    typedef Kokkos::ArithTraits<val_type> KAT;
+    typedef KokkosKernels::ArithTraits<val_type> KAT;
     typedef typename KAT::mag_type mag_type;
     const mag_type val_diff = KAT::abs(view1(i) - view2(i));
 
@@ -279,7 +163,7 @@ bool kk_is_identical_view(view_type1 view1, view_type2 view2, eps_type eps) {
 }
 
 template <typename view_type1, typename view_type2,
-          typename eps_type = typename Kokkos::ArithTraits<typename view_type2::non_const_value_type>::mag_type>
+          typename eps_type = typename KokkosKernels::ArithTraits<typename view_type2::non_const_value_type>::mag_type>
 struct IsRelativelyIdenticalFunctor {
   view_type1 view1;
   view_type2 view2;
@@ -291,9 +175,9 @@ struct IsRelativelyIdenticalFunctor {
   KOKKOS_INLINE_FUNCTION
   void operator()(const size_t &i, size_t &num_diffs) const {
     typedef typename view_type2::non_const_value_type val_type;
-    typedef Kokkos::ArithTraits<val_type> KAT;
+    typedef KokkosKernels::ArithTraits<val_type> KAT;
     typedef typename KAT::mag_type mag_type;
-    typedef Kokkos::ArithTraits<mag_type> KATM;
+    typedef KokkosKernels::ArithTraits<mag_type> KATM;
 
     mag_type val_diff = KATM::zero();
     if (KAT::abs(view1(i)) > mag_type(eps) || KAT::abs(view2(i)) > mag_type(eps)) {
@@ -446,6 +330,84 @@ void sequential_fill(const V &v, typename V::non_const_value_type start = 0) {
 }
 
 }  // namespace Impl
+
+/***
+ * \brief Perform an in-place exclusive parallel prefix sum. That is, element
+ * i will be replaced with the sum of elements 0...i-1 (excluding i itself).
+ * \param exec: the execution space instance on which to run
+ * \param arr: the array for which the prefix sum will be performed.
+ */
+template <typename ExecSpace, typename view_t>
+  requires(Kokkos::is_execution_space_v<ExecSpace>)
+void exclusive_parallel_prefix_sum(const ExecSpace &exec, const view_t &arr) {
+  using policy_t = Kokkos::RangePolicy<ExecSpace>;
+  Kokkos::parallel_scan("KokkosKernels::Common::PrefixSum", policy_t(exec, 0, arr.extent(0)),
+                        Impl::ExclusiveParallelPrefixSum<view_t>(arr));
+}
+
+/***
+ * \brief Perform an in-place exclusive parallel prefix sum. That is, element
+ * i will be replaced with the sum of elements 0...i-1 (excluding i itself).
+ * \param arr: the array for which the prefix sum will be performed.
+ */
+template <typename view_t>
+void exclusive_parallel_prefix_sum(const view_t &arr) {
+  exclusive_parallel_prefix_sum(typename view_t::execution_space(), arr);
+}
+
+/***
+ * \brief Perform an in-place exclusive parallel prefix sum. That is, element
+ * i will be replaced with the sum of elements 0...i-1 (excluding i itself).
+ * This version also returns the final sum
+ * equivalent to the sum-reduction of arr before doing the scan.
+ * \param exec: the execution space instance on which to run
+ * \param arr: the array for which the prefix sum will be performed.
+ * \param finalSum: will be set to the sum of arr's elements on input.
+ */
+template <typename ExecSpace, typename view_t>
+void exclusive_parallel_prefix_sum(const ExecSpace &exec, const view_t &arr,
+                                   typename view_t::non_const_value_type &finalSum) {
+  using policy_t = Kokkos::RangePolicy<ExecSpace>;
+  Kokkos::parallel_scan("KokkosKernels::Common::PrefixSum", policy_t(exec, 0, arr.extent(0)),
+                        Impl::ExclusiveParallelPrefixSum<view_t>(arr), finalSum);
+}
+
+/***
+ * \brief Perform an in-place exclusive parallel prefix sum. That is, element
+ * i will be replaced with the sum of elements 0...i-1 (excluding i itself). This version also returns the final sum
+ * equivalent to the sum-reduction of arr before doing the scan.
+ * \param arr: the array for which the prefix sum will be performed.
+ * \param finalSum: will be set to the sum of arr's elements on input.
+ */
+template <typename view_t>
+  requires(Kokkos::is_view_v<view_t>)
+void exclusive_parallel_prefix_sum(const view_t &arr, typename view_t::non_const_value_type &finalSum) {
+  exclusive_parallel_prefix_sum(typename view_t::execution_space(), arr, finalSum);
+}
+
+/***
+ *  \brief Perform an in-place inclusive parallel prefix sum. That is, element i will be replaced with the sum of
+ *  elements 0...i (including i itself).
+ *  \param my_exec_space: The execution space instance
+ *  \param arr: the array for which the prefix sum will be performed.
+ */
+template <typename ExecSpace, typename view_t>
+void inclusive_parallel_prefix_sum(const ExecSpace &exec, const view_t &arr) {
+  using policy_t = Kokkos::RangePolicy<ExecSpace>;
+  Kokkos::parallel_scan("KokkosKernels::Common::PrefixSum", policy_t(exec, 0, arr.extent(0)),
+                        Impl::InclusiveParallelPrefixSum<view_t>(arr));
+}
+
+/***
+ *  \brief Perform an in-place inclusive parallel prefix sum. That is, element i will be replaced with the sum of
+ *  elements 0...i (including i itself).
+ *  \param arr: the array for which the prefix sum will be performed.
+ */
+template <typename view_t>
+void inclusive_parallel_prefix_sum(const view_t &arr) {
+  return inclusive_parallel_prefix_sum(typename view_t::execution_space(), arr);
+}
+
 }  // namespace KokkosKernels
 
 #endif

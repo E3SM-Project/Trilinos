@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOSBLAS1_ABS_HPP_
 #define KOKKOSBLAS1_ABS_HPP_
@@ -65,26 +52,34 @@ void abs(const execution_space& space, const RMV& R, const XMV& X) {
                 "RMV and XMV must either have rank 1 or rank 2.");
 
   // Check compatibility of dimensions at run time.
-  if (X.extent(0) != R.extent(0) || X.extent(1) != R.extent(1)) {
-    std::ostringstream os;
-    os << "KokkosBlas::abs (MV): Dimensions of R and X do not match: "
-       << "R: " << R.extent(0) << " x " << R.extent(1) << ", X: " << X.extent(0) << " x " << X.extent(1);
-    KokkosKernels::Impl::throw_runtime_exception(os.str());
+  if constexpr (RMV::rank == 1) {
+    if (X.extent(0) != R.extent(0)) {
+      std::ostringstream os;
+      os << "KokkosBlas::abs (MV): Dimensions of R and X do not match: "
+         << "R: " << R.extent(0) << ", X: " << X.extent(0);
+      KokkosKernels::Impl::throw_runtime_exception(os.str());
+    }
+  } else if constexpr (RMV::rank == 2) {
+    if (X.extent(0) != R.extent(0) || X.extent(1) != R.extent(1)) {
+      std::ostringstream os;
+      os << "KokkosBlas::abs (MV): Dimensions of R and X do not match: "
+         << "R: " << R.extent(0) << " x " << R.extent(1) << ", X: " << X.extent(0) << " x " << X.extent(1);
+      KokkosKernels::Impl::throw_runtime_exception(os.str());
+    }
   }
 
   // Create unmanaged versions of the input Views.  RMV and XMV may be
   // rank 1 or rank 2.
-  using RMV_Internal = Kokkos::View<typename std::conditional<RMV::rank == 1, typename RMV::non_const_value_type*,
-                                                              typename RMV::non_const_value_type**>::type,
-                                    typename KokkosKernels::Impl::GetUnifiedLayout<RMV>::array_layout,
-                                    typename RMV::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
-  using XMV_Internal = Kokkos::View<typename std::conditional<XMV::rank == 1, typename XMV::const_value_type*,
-                                                              typename XMV::const_value_type**>::type,
-                                    typename KokkosKernels::Impl::GetUnifiedLayout<XMV>::array_layout,
-                                    typename XMV::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
+  using PreferredLayout = typename KokkosKernels::Impl::GetUnifiedLayout<XMV>::array_layout;
+  using RMV_Internal =
+      Kokkos::View<typename RMV::non_const_data_type,
+                   typename KokkosKernels::Impl::GetUnifiedLayoutPreferring<RMV, PreferredLayout>::array_layout,
+                   execution_space, Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
+  using XMV_Internal = Kokkos::View<typename XMV::const_data_type, PreferredLayout, execution_space,
+                                    Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
 
-  RMV_Internal R_internal = R;
-  XMV_Internal X_internal = X;
+  RMV_Internal R_internal = KokkosKernels::Impl::unificationCast<RMV_Internal>(R);
+  XMV_Internal X_internal = KokkosKernels::Impl::unificationCast<XMV_Internal>(X);
 
   Impl::Abs<execution_space, RMV_Internal, XMV_Internal>::abs(space, R_internal, X_internal);
 }

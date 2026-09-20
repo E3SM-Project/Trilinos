@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOSBLAS2_SYR_HPP_
 #define KOKKOSBLAS2_SYR_HPP_
@@ -110,12 +97,14 @@ void syr(const ExecutionSpace& space, const char trans[], const char uplo[],
   // on particular View specializations for its template parameters.
   using XVT = Kokkos::View<typename XViewType::const_value_type*,
                            typename KokkosKernels::Impl::GetUnifiedLayoutPreferring<XViewType, ALayout>::array_layout,
-                           typename XViewType::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
+                           ExecutionSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
 
-  using AVT = Kokkos::View<typename AViewType::non_const_value_type**, ALayout, typename AViewType::device_type,
+  using AVT = Kokkos::View<typename AViewType::non_const_value_type**, ALayout, ExecutionSpace,
                            Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
 
-  Impl::SYR<ExecutionSpace, XVT, AVT>::syr(space, trans, uplo, alpha, x, A);
+  XVT x_internal = KokkosKernels::Impl::unificationCast<XVT>(x);
+  AVT A_internal = KokkosKernels::Impl::unificationCast<AVT>(A);
+  Impl::SYR<ExecutionSpace, XVT, AVT>::syr(space, trans, uplo, alpha, x_internal, A_internal);
 }
 
 /// \brief Rank-1 update (just lower portion or just upper portion) of a

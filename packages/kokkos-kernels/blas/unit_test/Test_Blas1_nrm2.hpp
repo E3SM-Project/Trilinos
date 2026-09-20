@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #include <gtest/gtest.h>
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Random.hpp>
@@ -23,14 +10,14 @@ namespace Test {
 template <class ViewTypeA, class Device>
 void impl_test_nrm2(int N) {
   typedef typename ViewTypeA::value_type ScalarA;
-  typedef Kokkos::ArithTraits<ScalarA> AT;
+  typedef KokkosKernels::ArithTraits<ScalarA> AT;
 
-  view_stride_adapter<ViewTypeA> a("a", N);
+  TestUtils::view_stride_adapter<ViewTypeA> a("a", N);
 
   Kokkos::Random_XorShift64_Pool<typename Device::execution_space> rand_pool(13718);
 
   ScalarA randStart, randEnd;
-  Test::getRandomBounds(1.0, randStart, randEnd);
+  TestUtils::getRandomBounds(1.0, randStart, randEnd);
   Kokkos::fill_random(a.d_view, rand_pool, randStart, randEnd);
 
   Kokkos::deep_copy(a.h_base, a.d_base);
@@ -41,7 +28,7 @@ void impl_test_nrm2(int N) {
   for (int i = 0; i < N; i++) {
     expected_result += AT::abs(a.h_view(i)) * AT::abs(a.h_view(i));
   }
-  expected_result = Kokkos::ArithTraits<typename AT::mag_type>::sqrt(expected_result);
+  expected_result = KokkosKernels::ArithTraits<typename AT::mag_type>::sqrt(expected_result);
 
   typename AT::mag_type nonconst_result = KokkosBlas::nrm2(a.d_view);
   EXPECT_NEAR_KK(nonconst_result, expected_result, eps * expected_result);
@@ -53,14 +40,14 @@ void impl_test_nrm2(int N) {
 template <class ViewTypeA, class Device>
 void impl_test_nrm2_mv(int N, int K) {
   typedef typename ViewTypeA::value_type ScalarA;
-  typedef Kokkos::ArithTraits<ScalarA> AT;
+  typedef KokkosKernels::ArithTraits<ScalarA> AT;
 
-  view_stride_adapter<ViewTypeA> a("A", N, K);
+  TestUtils::view_stride_adapter<ViewTypeA> a("A", N, K);
 
   Kokkos::Random_XorShift64_Pool<typename Device::execution_space> rand_pool(13718);
 
   ScalarA randStart, randEnd;
-  Test::getRandomBounds(1.0, randStart, randEnd);
+  TestUtils::getRandomBounds(1.0, randStart, randEnd);
   Kokkos::fill_random(a.d_view, rand_pool, randStart, randEnd);
 
   Kokkos::deep_copy(a.h_base, a.d_base);
@@ -71,7 +58,7 @@ void impl_test_nrm2_mv(int N, int K) {
     for (int i = 0; i < N; i++) {
       expected_result[j] += AT::abs(a.h_view(i, j)) * AT::abs(a.h_view(i, j));
     }
-    expected_result[j] = Kokkos::ArithTraits<typename AT::mag_type>::sqrt(expected_result[j]);
+    expected_result[j] = KokkosKernels::ArithTraits<typename AT::mag_type>::sqrt(expected_result[j]);
   }
 
   double eps = std::is_same<ScalarA, float>::value ? 2 * 1e-5 : 1e-7;
