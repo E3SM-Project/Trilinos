@@ -1,23 +1,18 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_SORT_BY_KEY_FREE_FUNCS_IMPL_HPP_
 #define KOKKOS_SORT_BY_KEY_FREE_FUNCS_IMPL_HPP_
 
+#include <Kokkos_Macros.hpp>
+#ifdef KOKKOS_ENABLE_EXPERIMENTAL_CXX20_MODULES
+import kokkos.core;
+#else
 #include <Kokkos_Core.hpp>
+#endif
+
+#include <cstdint>
+#include <tuple>
 
 #if defined(KOKKOS_ENABLE_CUDA)
 
@@ -32,45 +27,41 @@
 #pragma GCC diagnostic ignored "-Wshadow"
 #pragma GCC diagnostic ignored "-Wsuggest-override"
 
-#if defined(KOKKOS_COMPILER_CLANG)
-// Some versions of Clang fail to compile Thrust, failing with errors like
-// this:
-//    <snip>/thrust/system/cuda/detail/core/agent_launcher.h:557:11:
-//    error: use of undeclared identifier 'va_printf'
-// The exact combination of versions for Clang and Thrust (or CUDA) for this
-// failure was not investigated, however even very recent version combination
-// (Clang 10.0.0 and Cuda 10.0) demonstrated failure.
-//
-// Defining _CubLog here locally allows us to avoid that code path, however
-// disabling some debugging diagnostics
-#pragma push_macro("_CubLog")
-#ifdef _CubLog
-#undef _CubLog
-#endif
-#define _CubLog
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
-#pragma pop_macro("_CubLog")
-#else
-#include <thrust/device_ptr.h>
-#include <thrust/sort.h>
-#endif
 
 #pragma GCC diagnostic pop
 
-#endif
+#elif defined(KOKKOS_ENABLE_ROCTHRUST)
 
-#if defined(KOKKOS_ENABLE_ROCTHRUST)
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
+
 #endif
 
-#if defined(KOKKOS_ENABLE_ONEDPL) && \
-    (ONEDPL_VERSION_MAJOR > 2022 ||  \
-     (ONEDPL_VERSION_MAJOR == 2022 && ONEDPL_VERSION_MINOR >= 2))
-#define KOKKOS_ONEDPL_HAS_SORT_BY_KEY
+#ifdef KOKKOS_ENABLE_ONEDPL
+#define KOKKOS_IMPL_ONEDPL_VERSION                            \
+  ONEDPL_VERSION_MAJOR * 10000 + ONEDPL_VERSION_MINOR * 100 + \
+      ONEDPL_VERSION_PATCH
+#define KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL(MAJOR, MINOR, PATCH) \
+  (KOKKOS_IMPL_ONEDPL_VERSION >= ((MAJOR)*10000 + (MINOR)*100 + (PATCH)))
+
+#if KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL(2022, 2, 0)
+#define KOKKOS_IMPL_ONEDPL_HAS_SORT_BY_KEY
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wshadow"
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wunused-local-typedef"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-variable"
 #include <oneapi/dpl/execution>
 #include <oneapi/dpl/algorithm>
+#pragma GCC diagnostic pop
+#endif
+#endif
+
+#ifndef KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL
+#define KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL(MAJOR, MINOR, PATCH) 0
 #endif
 
 namespace Kokkos::Impl {
@@ -111,12 +102,34 @@ void sort_by_key_cudathrust(
     const Kokkos::View<KeysDataType, KeysProperties...>& keys,
     const Kokkos::View<ValuesDataType, ValuesProperties...>& values,
     MaybeComparator&&... maybeComparator) {
+  using KeysType    = Kokkos::View<KeysDataType, KeysProperties...>;
+  using ValuesType  = Kokkos::View<ValuesDataType, ValuesProperties...>;
   const auto policy = thrust::cuda::par.on(exec.cuda_stream());
-  auto keys_first   = ::Kokkos::Experimental::begin(keys);
-  auto keys_last    = ::Kokkos::Experimental::end(keys);
-  auto values_first = ::Kokkos::Experimental::begin(values);
-  thrust::sort_by_key(policy, keys_first, keys_last, values_first,
-                      std::forward<MaybeComparator>(maybeComparator)...);
+  static constexpr bool keys_are_contiguous =
+      KeysType::rank() == 1 &&
+      (std::is_same_v<typename KeysType::traits::array_layout,
+                      Kokkos::LayoutLeft> ||
+       std::is_same_v<typename KeysType::traits::array_layout,
+                      Kokkos::LayoutRight>);
+  static constexpr bool values_are_contiguous =
+      ValuesType::rank() == 1 &&
+      (std::is_same_v<typename ValuesType::traits::array_layout,
+                      Kokkos::LayoutLeft> ||
+       std::is_same_v<typename ValuesType::traits::array_layout,
+                      Kokkos::LayoutRight>);
+  if constexpr (keys_are_contiguous && values_are_contiguous) {
+    auto keys_first   = keys.data();
+    auto keys_last    = keys.data() + keys.extent(0);
+    auto values_first = values.data();
+    thrust::sort_by_key(policy, keys_first, keys_last, values_first,
+                        std::forward<MaybeComparator>(maybeComparator)...);
+  } else {
+    auto keys_first   = ::Kokkos::Experimental::begin(keys);
+    auto keys_last    = ::Kokkos::Experimental::end(keys);
+    auto values_first = ::Kokkos::Experimental::begin(values);
+    thrust::sort_by_key(policy, keys_first, keys_last, values_first,
+                        std::forward<MaybeComparator>(maybeComparator)...);
+  }
 }
 #endif
 
@@ -131,22 +144,50 @@ void sort_by_key_rocthrust(
     const Kokkos::View<KeysDataType, KeysProperties...>& keys,
     const Kokkos::View<ValuesDataType, ValuesProperties...>& values,
     MaybeComparator&&... maybeComparator) {
+  using KeysType    = Kokkos::View<KeysDataType, KeysProperties...>;
+  using ValuesType  = Kokkos::View<ValuesDataType, ValuesProperties...>;
   const auto policy = thrust::hip::par.on(exec.hip_stream());
-  auto keys_first   = ::Kokkos::Experimental::begin(keys);
-  auto keys_last    = ::Kokkos::Experimental::end(keys);
-  auto values_first = ::Kokkos::Experimental::begin(values);
-  thrust::sort_by_key(policy, keys_first, keys_last, values_first,
-                      std::forward<MaybeComparator>(maybeComparator)...);
+  static constexpr bool keys_are_contiguous =
+      KeysType::rank() == 1 &&
+      (std::is_same_v<typename KeysType::traits::array_layout,
+                      Kokkos::LayoutLeft> ||
+       std::is_same_v<typename KeysType::traits::array_layout,
+                      Kokkos::LayoutRight>);
+  static constexpr bool values_are_contiguous =
+      ValuesType::rank() == 1 &&
+      (std::is_same_v<typename ValuesType::traits::array_layout,
+                      Kokkos::LayoutLeft> ||
+       std::is_same_v<typename ValuesType::traits::array_layout,
+                      Kokkos::LayoutRight>);
+  if constexpr (keys_are_contiguous && values_are_contiguous) {
+    auto keys_first   = keys.data();
+    auto keys_last    = keys.data() + keys.extent(0);
+    auto values_first = values.data();
+    thrust::sort_by_key(policy, keys_first, keys_last, values_first,
+                        std::forward<MaybeComparator>(maybeComparator)...);
+  } else {
+    auto keys_first   = ::Kokkos::Experimental::begin(keys);
+    auto keys_last    = ::Kokkos::Experimental::end(keys);
+    auto values_first = ::Kokkos::Experimental::begin(values);
+    thrust::sort_by_key(policy, keys_first, keys_last, values_first,
+                        std::forward<MaybeComparator>(maybeComparator)...);
+  }
 }
 #endif
 
 #if defined(KOKKOS_ENABLE_ONEDPL)
+
+#if KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL(2022, 8, 0)
+template <class Layout>
+inline constexpr bool sort_on_device_v<Kokkos::SYCL, Layout> = true;
+#else
 template <class Layout>
 inline constexpr bool sort_on_device_v<Kokkos::SYCL, Layout> =
     std::is_same_v<Layout, Kokkos::LayoutLeft> ||
     std::is_same_v<Layout, Kokkos::LayoutRight>;
+#endif
 
-#ifdef KOKKOS_ONEDPL_HAS_SORT_BY_KEY
+#ifdef KOKKOS_IMPL_ONEDPL_HAS_SORT_BY_KEY
 template <class KeysDataType, class... KeysProperties, class ValuesDataType,
           class... ValuesProperties, class... MaybeComparator>
 void sort_by_key_onedpl(
@@ -154,6 +195,14 @@ void sort_by_key_onedpl(
     const Kokkos::View<KeysDataType, KeysProperties...>& keys,
     const Kokkos::View<ValuesDataType, ValuesProperties...>& values,
     MaybeComparator&&... maybeComparator) {
+  auto queue  = exec.sycl_queue();
+  auto policy = oneapi::dpl::execution::make_device_policy(queue);
+
+#if KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL(2022, 8, 0)
+  auto keys_begin   = ::Kokkos::Experimental::begin(keys);
+  auto keys_end     = ::Kokkos::Experimental::end(keys);
+  auto values_begin = ::Kokkos::Experimental::begin(values);
+#else
   if (keys.stride(0) != 1 && values.stride(0) != 1) {
     Kokkos::abort(
         "SYCL sort_by_key only supports rank-1 Views with stride(0) = 1.");
@@ -161,11 +210,24 @@ void sort_by_key_onedpl(
 
   // Can't use Experimental::begin/end here since the oneDPL then assumes that
   // the data is on the host.
-  auto queue  = exec.sycl_queue();
-  auto policy = oneapi::dpl::execution::make_device_policy(queue);
-  const int n = keys.extent(0);
-  oneapi::dpl::sort_by_key(policy, keys.data(), keys.data() + n, values.data(),
-                           std::forward<MaybeComparator>(maybeComparator)...);
+  const int n       = keys.extent(0);
+  auto keys_begin   = keys.data();
+  auto keys_end     = keys.data() + n;
+  auto values_begin = values.data();
+#endif
+
+  if constexpr (sizeof...(MaybeComparator) == 0)
+    oneapi::dpl::sort_by_key(policy, keys_begin, keys_end, values_begin);
+  else {
+    using keys_value_type =
+        typename Kokkos::View<KeysDataType, KeysProperties...>::value_type;
+    auto keys_comparator =
+        std::get<0>(std::tuple<MaybeComparator...>(maybeComparator...));
+    oneapi::dpl::sort_by_key(
+        policy, keys_begin, keys_end, values_begin,
+        ComparatorWrapper<decltype(keys_comparator), keys_value_type>{
+            keys_comparator});
+  }
 }
 #endif
 #endif
@@ -183,8 +245,9 @@ void applyPermutation(const ExecutionSpace& space,
   Kokkos::deep_copy(space, view_copy, view);
   Kokkos::parallel_for(
       "Kokkos::sort_by_key_via_sort::permute_" + view.label(),
-      Kokkos::RangePolicy<ExecutionSpace>(space, 0, view.extent(0)),
-      KOKKOS_LAMBDA(int i) { view(i) = view_copy(permutation(i)); });
+      Kokkos::RangePolicy<ExecutionSpace, Kokkos::IndexType<int64_t>>(
+          space, 0, view.extent(0)),
+      KOKKOS_LAMBDA(int64_t i) { view(i) = view_copy(permutation(i)); });
 }
 
 // FIXME_NVCC: nvcc has trouble compiling lambdas inside a function with
@@ -192,12 +255,12 @@ void applyPermutation(const ExecutionSpace& space,
 template <typename Permute>
 struct IotaFunctor {
   Permute _permute;
-  KOKKOS_FUNCTION void operator()(int i) const { _permute(i) = i; }
+  KOKKOS_FUNCTION void operator()(int64_t i) const { _permute(i) = i; }
 };
 template <typename Keys>
 struct LessFunctor {
   Keys _keys;
-  KOKKOS_FUNCTION bool operator()(int i, int j) const {
+  KOKKOS_FUNCTION bool operator()(int64_t i, int64_t j) const {
     return _keys(i) < _keys(j);
   }
 };
@@ -209,7 +272,7 @@ template <typename Keys, typename Comparator>
 struct KeyComparisonFunctor {
   Keys m_keys;
   Comparator m_comparator;
-  KOKKOS_FUNCTION bool operator()(int i, int j) const {
+  KOKKOS_FUNCTION bool operator()(int64_t i, int64_t j) const {
     return m_comparator(m_keys(i), m_keys(j));
   }
 };
@@ -226,18 +289,19 @@ void sort_by_key_via_sort(
 
   auto const n = keys.size();
 
-  Kokkos::View<unsigned int*, ExecutionSpace> permute(
+  Kokkos::View<int64_t*, ExecutionSpace> permute(
       Kokkos::view_alloc(exec, Kokkos::WithoutInitializing,
                          "Kokkos::sort_by_key_via_sort::permute"),
       n);
 
   // iota
-  Kokkos::parallel_for("Kokkos::sort_by_key_via_sort::iota",
-                       Kokkos::RangePolicy<ExecutionSpace>(exec, 0, n),
-                       IotaFunctor<decltype(permute)>{permute});
+  Kokkos::parallel_for(
+      "Kokkos::sort_by_key_via_sort::iota",
+      Kokkos::RangePolicy<ExecutionSpace, Kokkos::IndexType<int64_t>>(exec, 0,
+                                                                      n),
+      IotaFunctor<decltype(permute)>{permute});
 
-  using Layout =
-      typename Kokkos::View<unsigned int*, ExecutionSpace>::array_layout;
+  using Layout = typename Kokkos::View<int64_t*, ExecutionSpace>::array_layout;
   if constexpr (!sort_on_device_v<ExecutionSpace, Layout>) {
     auto host_keys = Kokkos::create_mirror_view(
         Kokkos::view_alloc(Kokkos::HostSpace{}, Kokkos::WithoutInitializing),
@@ -265,12 +329,13 @@ void sort_by_key_via_sort(
     host_exec.fence("Kokkos::Impl::sort_by_key_via_sort: after host sort");
     Kokkos::deep_copy(exec, permute, host_permute);
   } else {
-#ifdef KOKKOS_ENABLE_SYCL
+#if defined(KOKKOS_IMPL_ONEDPL_HAS_SORT_BY_KEY) && \
+    !KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL(2022, 8, 0)
     auto* raw_keys_in_comparator = keys.data();
     auto stride                  = keys.stride(0);
     if constexpr (sizeof...(MaybeComparator) == 0) {
       Kokkos::sort(
-          exec, permute, KOKKOS_LAMBDA(int i, int j) {
+          exec, permute, KOKKOS_LAMBDA(int64_t i, int64_t j) {
             return raw_keys_in_comparator[i * stride] <
                    raw_keys_in_comparator[j * stride];
           });
@@ -278,7 +343,7 @@ void sort_by_key_via_sort(
       auto keys_comparator =
           std::get<0>(std::tuple<MaybeComparator...>(maybeComparator...));
       Kokkos::sort(
-          exec, permute, KOKKOS_LAMBDA(int i, int j) {
+          exec, permute, KOKKOS_LAMBDA(int64_t i, int64_t j) {
             return keys_comparator(raw_keys_in_comparator[i * stride],
                                    raw_keys_in_comparator[j * stride]);
           });
@@ -336,12 +401,18 @@ void sort_by_key_device_view_without_comparator(
     const Kokkos::SYCL& exec,
     const Kokkos::View<KeysDataType, KeysProperties...>& keys,
     const Kokkos::View<ValuesDataType, ValuesProperties...>& values) {
-#ifdef KOKKOS_ONEDPL_HAS_SORT_BY_KEY
+#ifdef KOKKOS_IMPL_ONEDPL_HAS_SORT_BY_KEY
+#if KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL(2022, 8, 0)
+  sort_by_key_onedpl(exec, keys, values);
+#else
   if (keys.stride(0) == 1 && values.stride(0) == 1)
     sort_by_key_onedpl(exec, keys, values);
   else
-#endif
     sort_by_key_via_sort(exec, keys, values);
+#endif
+#else
+  sort_by_key_via_sort(exec, keys, values);
+#endif
 }
 #endif
 
@@ -394,12 +465,18 @@ void sort_by_key_device_view_with_comparator(
     const Kokkos::View<KeysDataType, KeysProperties...>& keys,
     const Kokkos::View<ValuesDataType, ValuesProperties...>& values,
     const ComparatorType& comparator) {
-#ifdef KOKKOS_ONEDPL_HAS_SORT_BY_KEY
+#ifdef KOKKOS_IMPL_ONEDPL_HAS_SORT_BY_KEY
+#if KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL(2022, 8, 0)
+  sort_by_key_onedpl(exec, keys, values, comparator);
+#else
   if (keys.stride(0) == 1 && values.stride(0) == 1)
     sort_by_key_onedpl(exec, keys, values, comparator);
   else
-#endif
     sort_by_key_via_sort(exec, keys, values, comparator);
+#endif
+#else
+  sort_by_key_via_sort(exec, keys, values, comparator);
+#endif
 }
 #endif
 
@@ -416,7 +493,9 @@ sort_by_key_device_view_with_comparator(
   sort_by_key_via_sort(exec, keys, values, comparator);
 }
 
-#undef KOKKOS_ONEDPL_HAS_SORT_BY_KEY
+#undef KOKKOS_IMPL_ONEDPL_HAS_SORT_BY_KEY
 
 }  // namespace Kokkos::Impl
+#undef KOKKOS_IMPL_ONEDPL_VERSION
+#undef KOKKOS_IMPL_ONEDPL_VERSION_GREATER_EQUAL
 #endif
