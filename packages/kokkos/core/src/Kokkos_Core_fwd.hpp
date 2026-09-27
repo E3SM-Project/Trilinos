@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_CORE_FWD_HPP
 #define KOKKOS_CORE_FWD_HPP
@@ -49,11 +36,9 @@ struct AUTO_t {
   constexpr const AUTO_t &operator()() const { return *this; }
 };
 
-namespace {
 /**\brief Token to indicate that a parameter's value is to be automatically
  * selected */
-constexpr AUTO_t AUTO = Kokkos::AUTO_t();
-}  // namespace
+inline constexpr AUTO_t AUTO{};
 
 struct InvalidType {};
 
@@ -83,8 +68,9 @@ class InitializationSettings;
 
 /// Define Kokkos::DefaultExecutionSpace as per configuration option
 /// or chosen from the enabled execution spaces in the following order:
-/// Kokkos::Cuda, Kokkos::Experimental::OpenMPTarget, Kokkos::OpenMP,
+/// Kokkos::Cuda, Kokkos::OpenMP,
 /// Kokkos::Threads, Kokkos::Serial
+/// Also define the derivative DefaultMemorySpace
 
 #if defined(__clang_analyzer__)
 #define KOKKOS_IMPL_DEFAULT_EXEC_SPACE_ANNOTATION \
@@ -100,28 +86,37 @@ namespace Kokkos {
 
 #if defined(KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_CUDA)
 using DefaultExecutionSpace KOKKOS_IMPL_DEFAULT_EXEC_SPACE_ANNOTATION = Cuda;
-#elif defined(KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_OPENMPTARGET)
-using DefaultExecutionSpace KOKKOS_IMPL_DEFAULT_EXEC_SPACE_ANNOTATION =
-    Experimental::OpenMPTarget;
+using DefaultMemorySpace = CudaSpace;
 #elif defined(KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_HIP)
 using DefaultExecutionSpace KOKKOS_IMPL_DEFAULT_EXEC_SPACE_ANNOTATION = HIP;
+using DefaultMemorySpace = HIPSpace;
 #elif defined(KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_SYCL)
 using DefaultExecutionSpace KOKKOS_IMPL_DEFAULT_EXEC_SPACE_ANNOTATION = SYCL;
+using DefaultMemorySpace = SYCLDeviceUSMSpace;
 #elif defined(KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_OPENACC)
 using DefaultExecutionSpace KOKKOS_IMPL_DEFAULT_EXEC_SPACE_ANNOTATION =
     Experimental::OpenACC;
+using DefaultMemorySpace = Experimental::OpenACCSpace;
+#elif defined(KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_NEXTSILICON)
+using DefaultExecutionSpace KOKKOS_IMPL_DEFAULT_EXEC_SPACE_ANNOTATION =
+    Experimental::NextSilicon;
+using DefaultMemorySpace = Experimental::NextSiliconSharedSpace;
 #elif defined(KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_OPENMP)
 using DefaultExecutionSpace KOKKOS_IMPL_DEFAULT_EXEC_SPACE_ANNOTATION = OpenMP;
+using DefaultMemorySpace = HostSpace;
 #elif defined(KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_THREADS)
 using DefaultExecutionSpace KOKKOS_IMPL_DEFAULT_EXEC_SPACE_ANNOTATION = Threads;
+using DefaultMemorySpace = HostSpace;
 #elif defined(KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_HPX)
 using DefaultExecutionSpace KOKKOS_IMPL_DEFAULT_EXEC_SPACE_ANNOTATION =
-    Kokkos::Experimental::HPX;
+    Experimental::HPX;
+using DefaultMemorySpace = HostSpace;
 #elif defined(KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_SERIAL)
 using DefaultExecutionSpace KOKKOS_IMPL_DEFAULT_EXEC_SPACE_ANNOTATION = Serial;
+using DefaultMemorySpace = HostSpace;
 #else
 #error \
-    "At least one of the following execution spaces must be defined in order to use Kokkos: Kokkos::Cuda, Kokkos::HIP, Kokkos::SYCL, Kokkos::Experimental::OpenMPTarget, Kokkos::Experimental::OpenACC, Kokkos::OpenMP, Kokkos::Threads, Kokkos::Experimental::HPX, or Kokkos::Serial."
+    "At least one of the following execution spaces must be defined in order to use Kokkos: Kokkos::Cuda, Kokkos::HIP, Kokkos::SYCL, Kokkos::Experimental::OpenACC, Kokkos::Experimental::NextSilicon, Kokkos::OpenMP, Kokkos::Threads, Kokkos::Experimental::HPX, or Kokkos::Serial."
 #endif
 
 #if defined(KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_OPENMP)
@@ -153,7 +148,11 @@ using DefaultHostExecutionSpace KOKKOS_IMPL_DEFAULT_HOST_EXEC_SPACE_ANNOTATION =
     "At least one of the following execution spaces must be defined in order to use Kokkos: Kokkos::OpenMP, Kokkos::Threads, Kokkos::Experimental::HPX, or Kokkos::Serial."
 #endif
 
-// check for devices that support sharedSpace
+// define the DefaultHostMemorySpace which right now always is HostSpace
+// In the past (Intel KNL with HBM + DDR) that was not always true
+using DefaultHostMemorySpace = HostSpace;
+
+// check for devices that support SharedSpace
 #if defined(KOKKOS_ENABLE_CUDA)
 using SharedSpace = CudaUVMSpace;
 #define KOKKOS_HAS_SHARED_SPACE
@@ -161,11 +160,14 @@ using SharedSpace = CudaUVMSpace;
 using SharedSpace = HIPManagedSpace;
 #define KOKKOS_HAS_SHARED_SPACE
 #elif defined(KOKKOS_ENABLE_SYCL)
-using SharedSpace = SYCLSharedUSMSpace;
+using SharedSpace               = SYCLSharedUSMSpace;
+#define KOKKOS_HAS_SHARED_SPACE
+#elif defined(KOKKOS_ENABLE_NEXTSILICON)
+using SharedSpace = Experimental::NextSiliconSharedSpace;
 #define KOKKOS_HAS_SHARED_SPACE
 // if only host compile point to HostSpace
-#elif !defined(KOKKOS_ENABLE_OPENACC) && !defined(KOKKOS_ENABLE_OPENMPTARGET)
-using SharedSpace               = HostSpace;
+#elif !defined(KOKKOS_ENABLE_OPENACC)
+using SharedSpace = HostSpace;
 #define KOKKOS_HAS_SHARED_SPACE
 #endif
 
@@ -185,7 +187,7 @@ using SharedHostPinnedSpace = HIPHostPinnedSpace;
 #elif defined(KOKKOS_ENABLE_SYCL)
     using SharedHostPinnedSpace = SYCLHostUSMSpace;
 #define KOKKOS_HAS_SHARED_HOST_PINNED_SPACE
-#elif !defined(KOKKOS_ENABLE_OPENACC) && !defined(KOKKOS_ENABLE_OPENMPTARGET)
+#elif !defined(KOKKOS_ENABLE_OPENACC) && !defined(KOKKOS_ENABLE_NEXTSILICON)
     using SharedHostPinnedSpace = HostSpace;
 #define KOKKOS_HAS_SHARED_HOST_PINNED_SPACE
 #endif
@@ -259,15 +261,7 @@ KOKKOS_FUNCTION void runtime_check_memory_access_violation(
 //----------------------------------------------------------------------------
 
 namespace Kokkos {
-// Getting ICE in Trilinos in Sacado and Intrepid in deep_copy
-// See issue https://github.com/kokkos/kokkos/issues/5290
-// Simply taking string by value did not resolve the issue
-#ifdef KOKKOS_COMPILER_INTEL
-void fence();
-void fence(const std::string &name);
-#else
 void fence(const std::string &name = "Kokkos::fence: Unnamed Global Fence");
-#endif
 }  // namespace Kokkos
 
 //----------------------------------------------------------------------------
@@ -283,15 +277,6 @@ template <class DstSpace, class SrcSpace,
           class ExecutionSpace = typename DstSpace::execution_space,
           class Enable         = void>
 struct DeepCopy;
-
-template <class ViewType, class Layout = typename ViewType::array_layout,
-          class ExecSpace = typename ViewType::execution_space,
-          int Rank = ViewType::rank, typename iType = int64_t>
-struct ViewFill;
-
-template <class ViewTypeA, class ViewTypeB, class Layout, class ExecSpace,
-          int Rank, typename iType>
-struct ViewCopy;
 
 template <class Functor, class Policy>
 struct FunctorPolicyExecutionSpace;

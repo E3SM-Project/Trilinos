@@ -19,19 +19,17 @@ foreach(Tag Threads;Serial;OpenMP;HPX;Cuda;HIP;SYCL)
       DynViewAPI_generic
       DynViewAPI_rank12345
       DynViewAPI_rank67
+      DynRankView_Ctors
+      DynRankView_LayoutMember
       DynRankView_TeamScratch
+      DynRankView_ViewCustomization
       ErrorReporter
       OffsetView
       ScatterView
-      StaticCrsGraph
       WithoutInitializing
       UnorderedMap
-      Vector
-      ViewCtorPropEmbeddedDim
+      UnorderedSet
     )
-      if(NOT Kokkos_ENABLE_DEPRECATED_CODE_4 AND Name STREQUAL "Vector")
-        continue() # skip Kokkos::vector test if deprecated code 4 is not enabled
-      endif()
       # Write to a temporary intermediate file and call configure_file to avoid
       # updating timestamps triggering unnecessary rebuilds on subsequent cmake runs.
       set(file ${dir}/Test${Tag}_${Name}.cpp)
@@ -53,7 +51,5 @@ foreach(Tag Threads;Serial;OpenMP;HPX;Cuda;HIP;SYCL)
   endif()
 endforeach()
 
-set(COMPILE_ONLY_SOURCES TestCreateMirror.cpp TestDualViewParameterPack.cpp TestIsViewTrait.cpp
-                         TestDynRankViewTypedefs.cpp
-)
+set(COMPILE_ONLY_SOURCES TestCreateMirror.cpp TestIsViewTrait.cpp TestDynRankViewTypedefs.cpp)
 kokkos_add_executable(ContainersTestCompileOnly SOURCES TestCompileMain.cpp ${COMPILE_ONLY_SOURCES})

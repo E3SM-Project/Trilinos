@@ -1,22 +1,19 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
+#include <Kokkos_Macros.hpp>
+#ifdef KOKKOS_ENABLE_EXPERIMENTAL_CXX20_MODULES
+import kokkos.core;
+#else
 #include <Kokkos_Core.hpp>
+#endif
 #include <Kokkos_Pair.hpp>
+#include <Kokkos_TypeInfo.hpp>
+
+#include <desul/atomics.hpp>
+
 #include <iostream>
+#include <limits>
 
 namespace TestAtomicOperations {
 
@@ -277,63 +274,6 @@ struct LoadStoreAtomicTest {
   static const char* name() { return "load/store"; }
 };
 
-#ifdef KOKKOS_ENABLE_DEPRECATED_CODE_4
-#ifdef KOKKOS_ENABLE_DEPRECATION_WARNINGS
-KOKKOS_IMPL_DISABLE_DEPRECATED_WARNINGS_PUSH()
-#endif
-struct DeprecatedAssignAtomicTest {
-  template <class T>
-  KOKKOS_FUNCTION static auto atomic_op(T* ptr_op, T* ptr_fetch_op,
-                                        T* ptr_op_fetch, T update) {
-    T old_val = Kokkos::atomic_load(ptr_op);
-    Kokkos::atomic_assign(ptr_op, update);
-    Kokkos::atomic_assign(ptr_op_fetch, update);
-    Kokkos::atomic_assign(ptr_fetch_op, update);
-    return Kokkos::pair<T, T>(old_val, update);
-  }
-  template <class T>
-  KOKKOS_FUNCTION static T op(T, T update) {
-    return update;
-  }
-  static const char* name() { return "load/assign"; }
-};
-
-struct DeprecatedIncrementAtomicTest {
-  template <class T>
-  KOKKOS_FUNCTION static auto atomic_op(T* ptr_op, T* ptr_fetch_op,
-                                        T* ptr_op_fetch, T) {
-    Kokkos::atomic_increment(ptr_op);
-    T old_val = Kokkos::atomic_fetch_inc(ptr_fetch_op);
-    T new_val = Kokkos::atomic_inc_fetch(ptr_op_fetch);
-    return Kokkos::pair<T, T>(old_val, new_val);
-  }
-  template <class T>
-  KOKKOS_FUNCTION static T op(T old, T) {
-    return old + 1;
-  }
-  static const char* name() { return "increment"; }
-};
-
-struct DeprecatedDecrementAtomicTest {
-  template <class T>
-  KOKKOS_FUNCTION static auto atomic_op(T* ptr_op, T* ptr_fetch_op,
-                                        T* ptr_op_fetch, T) {
-    Kokkos::atomic_decrement(ptr_op);
-    T old_val = Kokkos::atomic_fetch_dec(ptr_fetch_op);
-    T new_val = Kokkos::atomic_dec_fetch(ptr_op_fetch);
-    return Kokkos::pair<T, T>(old_val, new_val);
-  }
-  template <class T>
-  KOKKOS_FUNCTION static T op(T old, T) {
-    return old - 1;
-  }
-  static const char* name() { return "decrement"; }
-};
-#ifdef KOKKOS_ENABLE_DEPRECATION_WARNINGS
-KOKKOS_IMPL_DISABLE_DEPRECATED_WARNINGS_POP()
-#endif
-#endif
-
 struct IncModAtomicTest {
   template <class T>
   KOKKOS_FUNCTION static auto atomic_op(T* ptr_op, T* ptr_fetch_op,
@@ -384,7 +324,30 @@ struct DecModAtomicTest {
   static const char* name() { return "dec_mod"; }
 };
 
-template <class Op, class T, class ExecSpace>
+template <class T>
+KOKKOS_FUNCTION bool atomic_values_equal_1ulp(T actual, T expected) {
+  T next_up   = Kokkos::nextafter(expected, Kokkos::infinity_v<T>);
+  T next_down = Kokkos::nextafter(expected, -Kokkos::infinity_v<T>);
+  return actual == expected || actual == next_up || actual == next_down;
+}
+
+template <class T>
+KOKKOS_FUNCTION bool atomic_values_equal_1ulp(Kokkos::complex<T> actual,
+                                              Kokkos::complex<T> expected) {
+  return atomic_values_equal_1ulp(actual.real(), expected.real()) &&
+         atomic_values_equal_1ulp(actual.imag(), expected.imag());
+}
+
+template <bool AllowOneUlp, class T>
+KOKKOS_FUNCTION bool atomic_values_equal(T actual, T expected) {
+  if constexpr (AllowOneUlp) {
+    return atomic_values_equal_1ulp(actual, expected);
+  } else {
+    return actual == expected;
+  }
+}
+
+template <class Op, class T, class ExecSpace, bool AllowOneUlp = false>
 bool atomic_op_test(T old_val, T update) {
   Kokkos::View<T[3], ExecSpace> op_data("op_data");
   Kokkos::deep_copy(op_data, old_val);
@@ -396,11 +359,16 @@ bool atomic_op_test(T old_val, T update) {
             Op::atomic_op(&op_data(0), &op_data(1), &op_data(2), update);
         T expected_val = Op::op(old_val, update);
         Kokkos::memory_fence();
-        if (op_data(0) != expected_val) local_result += 1;
-        if (op_data(1) != expected_val) local_result += 2;
-        if (op_data(2) != expected_val) local_result += 4;
+        if (!atomic_values_equal<AllowOneUlp>(op_data(0), expected_val))
+          local_result += 1;
+        if (!atomic_values_equal<AllowOneUlp>(op_data(1), expected_val))
+          local_result += 2;
+        if (!atomic_values_equal<AllowOneUlp>(op_data(2), expected_val))
+          local_result += 4;
         if (fetch_result.first != old_val) local_result += 8;
-        if (fetch_result.second != expected_val) local_result += 16;
+        if (!atomic_values_equal<AllowOneUlp>(fetch_result.second,
+                                              expected_val))
+          local_result += 16;
       },
       result);
   if ((result & 1) != 0)
@@ -529,28 +497,12 @@ bool AtomicOperationsTestIntegralType(int old_val_in, int update_in, int test) {
                             : true;
 #endif
     case 13:
-      return
-#ifdef KOKKOS_ENABLE_DEPRECATED_CODE_4
-          atomic_op_test<DeprecatedIncrementAtomicTest, T, ExecSpace>(old_val,
-                                                                      update) &&
-#endif
-          atomic_op_test<IncAtomicTest, T, ExecSpace>(old_val, update);
+      return atomic_op_test<IncAtomicTest, T, ExecSpace>(old_val, update);
     case 14:
-      return
-#ifdef KOKKOS_ENABLE_DEPRECATED_CODE_4
-          atomic_op_test<DeprecatedDecrementAtomicTest, T, ExecSpace>(old_val,
-                                                                      update) &&
-#endif
-
-          atomic_op_test<DecAtomicTest, T, ExecSpace>(old_val, update);
+      return atomic_op_test<DecAtomicTest, T, ExecSpace>(old_val, update);
     case 15:
-      return
-#ifdef KOKKOS_ENABLE_DEPRECATED_CODE_4
-          atomic_op_test<DeprecatedAssignAtomicTest, T, ExecSpace>(old_val,
-                                                                   update) &&
-#endif
-
-          atomic_op_test<LoadStoreAtomicTest, T, ExecSpace>(old_val, update);
+      return atomic_op_test<LoadStoreAtomicTest, T, ExecSpace>(old_val, update);
+    default: Kokkos::abort("unreachable");
   }
 
   return true;
@@ -566,12 +518,13 @@ bool AtomicOperationsTestUnsignedIntegralType(int old_val_in, int update_in,
       return atomic_op_test<IncModAtomicTest, T, ExecSpace>(old_val, update);
     case 2:
       return atomic_op_test<DecModAtomicTest, T, ExecSpace>(old_val, update);
+    default: Kokkos::abort("unreachable");
   }
 
   return true;
 }
 
-template <class T, class ExecSpace>
+template <class T, class ExecSpace, bool AllowOneUlp = false>
 bool AtomicOperationsTestNonIntegralType(int old_val_in, int update_in,
                                          int test) {
   T old_val = static_cast<T>(old_val_in);
@@ -593,11 +546,13 @@ bool AtomicOperationsTestNonIntegralType(int old_val_in, int update_in,
 #else
     case 5:
       return update != 0
-                 ? atomic_op_test<DivAtomicTest, T, ExecSpace>(old_val, update)
+                 ? atomic_op_test<DivAtomicTest, T, ExecSpace, AllowOneUlp>(
+                       old_val, update)
                  : true;
 #endif
     case 6:
       return atomic_op_test<LoadStoreAtomicTest, T, ExecSpace>(old_val, update);
+    default: Kokkos::abort("unreachable");
   }
 
   return true;

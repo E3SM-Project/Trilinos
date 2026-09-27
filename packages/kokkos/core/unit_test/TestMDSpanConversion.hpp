@@ -1,23 +1,16 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #include <gtest/gtest.h>
 #include <type_traits>
 
+#include <Kokkos_Macros.hpp>
+#ifdef KOKKOS_ENABLE_EXPERIMENTAL_CXX20_MODULES
+import kokkos.core;
+import kokkos.core_impl;
+#else
 #include <Kokkos_Core.hpp>
+#endif
 #include "experimental/__p0009_bits/layout_stride.hpp"
 
 namespace {
@@ -27,11 +20,10 @@ struct TestViewMDSpanConversion {
   using value_type = T;
 
   template <std::size_t Padding>
-  using layout_left_padded = Kokkos::Experimental::layout_left_padded<Padding>;
+  using layout_left_padded = Kokkos::layout_left_padded<Padding>;
 
   template <std::size_t Padding>
-  using layout_right_padded =
-      Kokkos::Experimental::layout_right_padded<Padding>;
+  using layout_right_padded = Kokkos::layout_right_padded<Padding>;
 
   struct TestAccessor {
     using offset_policy    = TestAccessor;
@@ -66,8 +58,11 @@ struct TestViewMDSpanConversion {
         Kokkos::mdspan<value_type, extents_type, mdspan_layout_type>;
 
     static_assert(std::is_constructible_v<natural_mdspan_type, mdspan_type>);
-    static_assert(std::is_convertible_v<mdspan_type, natural_mdspan_type> ==
-                  std::is_convertible_v<mdspan_type, unmanaged_view_type>);
+    // FIXME: This tests needs some discussion (regarding view convertibility
+    // with respect to managed/unmanaged)
+    // static_assert(std::is_convertible_v<mdspan_type, natural_mdspan_type> ==
+    //               std::is_convertible_v<mdspan_type, unmanaged_view_type>);
+
     // Manually create an mdspan from ref so we have a valid pointer to play
     // with
     const auto &exts = mapping.extents();
@@ -88,7 +83,7 @@ struct TestViewMDSpanConversion {
 
   template <class MDSpanLayoutMapping, class ViewType>
   static void test_conversion_to_mdspan(
-      const MDSpanLayoutMapping &ref_layout_mapping, ViewType v) {
+      const MDSpanLayoutMapping &ref_layout_mapping, const ViewType v) {
     using view_type           = ViewType;
     using natural_mdspan_type = typename Kokkos::Impl::MDSpanViewTraits<
         typename view_type::traits>::mdspan_type;
@@ -506,13 +501,17 @@ TEST(TEST_CATEGORY, view_mdspan_conversion) {
   TestViewMDSpanConversion<int, TEST_EXECSPACE>::run_test();
 }
 
+// FIXME_NVHPC: Skipping for NVHPC with the Serial backend because running this
+// test causes a race condition in serial.self_similar_range_policy_computation.
+#if !(defined(KOKKOS_COMPILER_NVHPC) && defined(KOKKOS_ENABLE_OPENACC))
 TEST(TEST_CATEGORY, view_mdspan_conversion_with_stride) {
   {
-    Kokkos::View<int ***, Kokkos::LayoutLeft> source("S", 20, 40, 70);
+    Kokkos::View<int ***, Kokkos::LayoutLeft, TEST_EXECSPACE> source("S", 20,
+                                                                     40, 70);
     auto sub_v   = Kokkos::subview(source, Kokkos::pair{5, 15}, Kokkos::ALL(),
                                    Kokkos::pair{2, 38});
     auto sub_mds = sub_v.to_mdspan();
-    Kokkos::View<int ***, Kokkos::LayoutLeft> sub_v2(sub_mds);
+    Kokkos::View<int ***, Kokkos::LayoutLeft, TEST_EXECSPACE> sub_v2(sub_mds);
     ASSERT_EQ(static_cast<int>(sub_v.extent(0)), 10);
     ASSERT_EQ(static_cast<int>(sub_v.extent(1)), 40);
     ASSERT_EQ(static_cast<int>(sub_v.extent(2)), 36);
@@ -536,11 +535,12 @@ TEST(TEST_CATEGORY, view_mdspan_conversion_with_stride) {
     // layout_right_padded<dynamic_extent> has a custom stride for
     // stride(rank-2) LayoutRight has a custom stride for stride(0) That means
     // the "padding" only matches up for Rank-2 Views
-    Kokkos::View<int **, Kokkos::LayoutRight> source("S", 20, 40);
+    Kokkos::View<int **, Kokkos::LayoutRight, TEST_EXECSPACE> source("S", 20,
+                                                                     40);
     auto sub_v =
         Kokkos::subview(source, Kokkos::pair{5, 15}, Kokkos::pair{2, 38});
     auto sub_mds = sub_v.to_mdspan();
-    Kokkos::View<int **, Kokkos::LayoutRight> sub_v2(sub_mds);
+    Kokkos::View<int **, Kokkos::LayoutRight, TEST_EXECSPACE> sub_v2(sub_mds);
     ASSERT_EQ(static_cast<int>(sub_v.extent(0)), 10);
     ASSERT_EQ(static_cast<int>(sub_v.extent(1)), 36);
     ASSERT_EQ(static_cast<int>(sub_v.stride(0)), 40);
@@ -555,4 +555,5 @@ TEST(TEST_CATEGORY, view_mdspan_conversion_with_stride) {
     ASSERT_EQ(static_cast<int>(sub_v2.stride(1)), 1);
   }
 }
+#endif
 }  // namespace
