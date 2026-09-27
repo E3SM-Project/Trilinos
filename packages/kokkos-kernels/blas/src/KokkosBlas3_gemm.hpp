@@ -1,24 +1,10 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #ifndef KOKKOSBLAS3_GEMV_HPP_
 #define KOKKOSBLAS3_GEMV_HPP_
 
 /// \file KokkosBlas3_gemm.hpp
 
-#include <KokkosKernels_Macros.hpp>
 #include <KokkosBlas3_gemm_spec.hpp>
 #include <KokkosBlas2_gemv.hpp>
 #include <KokkosBlas1_scal.hpp>
@@ -42,17 +28,16 @@ template <class execution_space, class AViewType, class BViewType, class CViewTy
 bool gemv_based_gemm(
     const execution_space& space, const char transA[], const char transB[], typename AViewType::const_value_type& alpha,
     const AViewType& A, const BViewType& B, typename CViewType::const_value_type& beta, const CViewType& C,
-    typename std::enable_if<!std::is_same<typename BViewType::array_layout, Kokkos::LayoutStride>::value &&
-                            !std::is_same<typename CViewType::array_layout, Kokkos::LayoutStride>::value>::type* =
-        nullptr) {
+    typename std::enable_if<!std::is_same_v<typename BViewType::array_layout, Kokkos::LayoutStride> &&
+                            !std::is_same_v<typename CViewType::array_layout, Kokkos::LayoutStride>>::type* = nullptr) {
   if (toupper(transA[0]) == 'N' && toupper(transB[0]) == 'N' && B.extent(1) == size_t(1)) {
     // since B/C both have a single column and are not LayoutStride,
     // can create a raw contiguous rank-1 vector from them rather than using
     // subview.
-    Kokkos::View<typename BViewType::value_type*, typename BViewType::array_layout, typename BViewType::device_type,
+    Kokkos::View<typename BViewType::value_type*, typename BViewType::array_layout, execution_space,
                  Kokkos::MemoryTraits<Kokkos::Unmanaged>>
         Bvec(B.data(), B.extent(0));
-    Kokkos::View<typename CViewType::value_type*, typename CViewType::array_layout, typename CViewType::device_type,
+    Kokkos::View<typename CViewType::value_type*, typename CViewType::array_layout, execution_space,
                  Kokkos::MemoryTraits<Kokkos::Unmanaged>>
         Cvec(C.data(), C.extent(0));
     KokkosBlas::gemv(space, "N", alpha, A, Bvec, beta, Cvec);
@@ -69,9 +54,8 @@ bool gemv_based_gemm(
     const typename CViewType::execution_space& /*space*/, const char /*transA*/[], const char /*transB*/[],
     typename AViewType::const_value_type& /*alpha*/, const AViewType& /*A*/, const BViewType& /*B*/,
     typename CViewType::const_value_type& /*beta*/, const CViewType& /*C*/,
-    typename std::enable_if<std::is_same<typename BViewType::array_layout, Kokkos::LayoutStride>::value ||
-                            std::is_same<typename CViewType::array_layout, Kokkos::LayoutStride>::value>::type* =
-        nullptr) {
+    typename std::enable_if<std::is_same_v<typename BViewType::array_layout, Kokkos::LayoutStride> ||
+                            std::is_same_v<typename CViewType::array_layout, Kokkos::LayoutStride>>::type* = nullptr) {
   return false;
 }
 }  // namespace Impl
@@ -98,16 +82,15 @@ template <class execution_space, class AViewType, class BViewType, class CViewTy
 void gemm(const execution_space& space, const char transA[], const char transB[],
           typename AViewType::const_value_type& alpha, const AViewType& A, const BViewType& B,
           typename CViewType::const_value_type& beta, const CViewType& C) {
-#if (KOKKOSKERNELS_DEBUG_LEVEL > 0)
   static_assert(Kokkos::is_execution_space_v<execution_space>,
                 "KokkosBlas::gemm: execution_space must be a valid Kokkos "
                 "execution space");
-  static_assert(Kokkos::is_view<AViewType>::value, "KokkosBlas::gemm: AViewType must be a Kokkos::View.");
-  static_assert(Kokkos::is_view<BViewType>::value, "KokkosBlas::gemm: BViewType must be a Kokkos::View.");
-  static_assert(Kokkos::is_view<CViewType>::value, "KokkosBlas::gemm: CViewType must be a Kokkos::View.");
-  static_assert(static_cast<int>(AViewType::rank) == 2, "KokkosBlas::gemm: AViewType must have rank 2.");
-  static_assert(static_cast<int>(BViewType::rank) == 2, "KokkosBlas::gemm: BViewType must have rank 2.");
-  static_assert(static_cast<int>(CViewType::rank) == 2, "KokkosBlas::gemm: CViewType must have rank 2.");
+  static_assert(Kokkos::is_view_v<AViewType>, "KokkosBlas::gemm: AViewType must be a Kokkos::View.");
+  static_assert(Kokkos::is_view_v<BViewType>, "KokkosBlas::gemm: BViewType must be a Kokkos::View.");
+  static_assert(Kokkos::is_view_v<CViewType>, "KokkosBlas::gemm: CViewType must be a Kokkos::View.");
+  static_assert(static_cast<int>(AViewType::rank()) == 2, "KokkosBlas::gemm: AViewType must have rank 2.");
+  static_assert(static_cast<int>(BViewType::rank()) == 2, "KokkosBlas::gemm: BViewType must have rank 2.");
+  static_assert(static_cast<int>(CViewType::rank()) == 2, "KokkosBlas::gemm: CViewType must have rank 2.");
   static_assert(Kokkos::SpaceAccessibility<execution_space, typename AViewType::memory_space>::accessible,
                 "KokkosBlas::gemm: AViewType must be accessible from execution_space");
   static_assert(Kokkos::SpaceAccessibility<execution_space, typename BViewType::memory_space>::accessible,
@@ -115,6 +98,7 @@ void gemm(const execution_space& space, const char transA[], const char transB[]
   static_assert(Kokkos::SpaceAccessibility<execution_space, typename CViewType::memory_space>::accessible,
                 "KokkosBlas::gemm: CViewType must be accessible from execution_space");
 
+#ifndef NDEBUG
   // Check validity of transpose argument
   bool valid_transA = (transA[0] == 'N') || (transA[0] == 'n') || (transA[0] == 'T') || (transA[0] == 't') ||
                       (transA[0] == 'C') || (transA[0] == 'c');
@@ -148,7 +132,7 @@ void gemm(const execution_space& space, const char transA[], const char transB[]
        << " B: " << B.extent(0) << " x " << B.extent(1) << " C: " << C.extent(0) << " x " << C.extent(1);
     KokkosKernels::Impl::throw_runtime_exception(os.str());
   }
-#endif  // KOKKOSKERNELS_DEBUG_LEVEL > 0
+#endif  // NDEBUG
 
   // Return if C matrix is degenerated
   if ((C.extent(0) == 0) || (C.extent(1) == 0)) {
@@ -157,7 +141,7 @@ void gemm(const execution_space& space, const char transA[], const char transB[]
 
   // Simply scale C if A matrix is degenerated
   if (A.extent(1) == 0) {
-    scal(C, beta, C);
+    scal(space, C, beta, C);
     return;
   }
 
@@ -167,17 +151,17 @@ void gemm(const execution_space& space, const char transA[], const char transB[]
   // Minimize the number of Impl::GEMM instantiations, by
   // standardizing on particular View specializations for its template
   // parameters.
-  typedef Kokkos::View<typename AViewType::const_value_type**, typename AViewType::array_layout,
-                       typename AViewType::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged>>
-      AVT;
-  typedef Kokkos::View<typename BViewType::const_value_type**, typename BViewType::array_layout,
-                       typename BViewType::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged>>
-      BVT;
-  typedef Kokkos::View<typename CViewType::non_const_value_type**, typename CViewType::array_layout,
-                       typename CViewType::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged>>
-      CVT;
-  typedef Impl::GEMM<execution_space, AVT, BVT, CVT> impl_type;
-  impl_type::gemm(space, transA, transB, alpha, A, B, beta, C);
+  using AVT = Kokkos::View<typename AViewType::const_value_type**, typename AViewType::array_layout, execution_space,
+                           Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+  using BVT = Kokkos::View<typename BViewType::const_value_type**, typename BViewType::array_layout, execution_space,
+                           Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+  using CVT = Kokkos::View<typename CViewType::non_const_value_type**, typename CViewType::array_layout,
+                           execution_space, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+  using impl_type = Impl::GEMM<execution_space, AVT, BVT, CVT>;
+  AVT A_internal  = KokkosKernels::Impl::unificationCast<AVT>(A);
+  BVT B_internal  = KokkosKernels::Impl::unificationCast<BVT>(B);
+  CVT C_internal  = KokkosKernels::Impl::unificationCast<CVT>(C);
+  impl_type::gemm(space, transA, transB, alpha, A_internal, B_internal, beta, C_internal);
 }
 
 /// \brief Dense matrix-matrix multiply: C = beta*C + alpha*op(A)*op(B).
