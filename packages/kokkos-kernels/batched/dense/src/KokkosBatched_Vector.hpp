@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #ifndef KOKKOSBATCHED_VECTOR_HPP
 #define KOKKOSBATCHED_VECTOR_HPP
 
@@ -203,38 +190,58 @@ struct DefaultInternalVectorLength<Kokkos::complex<double>, Kokkos::HIPSpace> {
 template <typename T>
 struct MagnitudeScalarType;
 
+#if !KOKKOS_HALF_T_IS_FLOAT
+template <>
+struct MagnitudeScalarType<Kokkos::Experimental::half_t> {
+  using type = Kokkos::Experimental::half_t;
+};
+#endif
 template <>
 struct MagnitudeScalarType<float> {
-  typedef float type;
+  using type = float;
 };
 template <>
 struct MagnitudeScalarType<double> {
-  typedef double type;
+  using type = double;
+};
+template <>
+struct MagnitudeScalarType<long double> {
+  using type = long double;
 };
 template <>
 struct MagnitudeScalarType<Kokkos::complex<float>> {
-  typedef float type;
+  using type = float;
 };
 template <>
 struct MagnitudeScalarType<Kokkos::complex<double>> {
-  typedef double type;
+  using type = double;
 };
 
+#if !KOKKOS_HALF_T_IS_FLOAT
+template <int l>
+struct MagnitudeScalarType<Vector<SIMD<Kokkos::Experimental::half_t>, l>> {
+  using type = Kokkos::Experimental::half_t;
+};
+#endif
 template <int l>
 struct MagnitudeScalarType<Vector<SIMD<float>, l>> {
-  typedef float type;
+  using type = float;
 };
 template <int l>
 struct MagnitudeScalarType<Vector<SIMD<double>, l>> {
-  typedef double type;
+  using type = double;
+};
+template <int l>
+struct MagnitudeScalarType<Vector<SIMD<long double>, l>> {
+  using type = long double;
 };
 template <int l>
 struct MagnitudeScalarType<Vector<SIMD<Kokkos::complex<float>>, l>> {
-  typedef float type;
+  using type = float;
 };
 template <int l>
 struct MagnitudeScalarType<Vector<SIMD<Kokkos::complex<double>>, l>> {
-  typedef double type;
+  using type = double;
 };
 
 }  // namespace KokkosBatched
@@ -242,7 +249,7 @@ struct MagnitudeScalarType<Vector<SIMD<Kokkos::complex<double>>, l>> {
 #include "KokkosBatched_Vector_SIMD.hpp"
 
 // arith traits overload for vector types
-namespace Kokkos {
+namespace KokkosKernels {
 
 // do not use Vector alone as other can use the name.
 
@@ -318,6 +325,6 @@ class ArithTraits<KokkosBatched::Vector<KokkosBatched::SIMD<Kokkos::complex<T>>,
   }
 };
 
-}  // namespace Kokkos
+}  // namespace KokkosKernels
 
 #endif

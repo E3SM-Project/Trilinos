@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #include <KokkosKernels_ExecSpaceUtils.hpp>
 #include "KokkosGraph_Distance1ColorHandle.hpp"
 #include "KokkosGraph_Distance2ColorHandle.hpp"
@@ -25,8 +12,8 @@
 #include "KokkosSparse_gmres_handle.hpp"
 #include "KokkosKernels_default_types.hpp"
 
-#ifndef _KOKKOSKERNELHANDLE_HPP
-#define _KOKKOSKERNELHANDLE_HPP
+#ifndef KOKKOSKERNELS_HANDLE_HPP
+#define KOKKOSKERNELS_HANDLE_HPP
 
 namespace KokkosKernels {
 
@@ -218,16 +205,18 @@ class KokkosKernelsHandle {
   typedef typename Kokkos::View<size_type *, HandleTempMemorySpace> size_type_temp_work_view_t;
   typedef typename Kokkos::View<size_type *, HandlePersistentMemorySpace> row_lno_persistent_work_view_t;
   typedef typename Kokkos::View<size_type *, HandlePersistentMemorySpace> size_type_persistent_work_view_t;
-  typedef typename row_lno_persistent_work_view_t::HostMirror row_lno_persistent_work_host_view_t;  // Host view type
   typedef
-      typename size_type_persistent_work_view_t::HostMirror size_type_persistent_work_host_view_t;  // Host view type
+      typename row_lno_persistent_work_view_t::host_mirror_type row_lno_persistent_work_host_view_t;  // Host view type
+  typedef typename size_type_persistent_work_view_t::host_mirror_type
+      size_type_persistent_work_host_view_t;  // Host view type
   typedef typename Kokkos::View<nnz_scalar_t *, HandleTempMemorySpace> scalar_temp_work_view_t;
   typedef typename Kokkos::View<nnz_scalar_t *, HandlePersistentMemorySpace> scalar_persistent_work_view_t;
   typedef typename Kokkos::View<nnz_scalar_t **, KokkosKernels::default_layout, HandlePersistentMemorySpace>
       scalar_persistent_work_view2d_t;
   typedef typename Kokkos::View<nnz_lno_t *, HandleTempMemorySpace> nnz_lno_temp_work_view_t;
   typedef typename Kokkos::View<nnz_lno_t *, HandlePersistentMemorySpace> nnz_lno_persistent_work_view_t;
-  typedef typename nnz_lno_persistent_work_view_t::HostMirror nnz_lno_persistent_work_host_view_t;  // Host view type
+  typedef
+      typename nnz_lno_persistent_work_view_t::host_mirror_type nnz_lno_persistent_work_host_view_t;  // Host view type
   typedef typename Kokkos::View<bool *, HandlePersistentMemorySpace> bool_persistent_view_t;
   typedef typename Kokkos::View<bool *, HandleTempMemorySpace> bool_temp_view_t;
 
@@ -463,12 +452,21 @@ class KokkosKernelsHandle {
     }
   }
 
-  // SPGEM
   SPGEMMHandleType *get_spgemm_handle() { return this->spgemmHandle; }
-  void create_spgemm_handle(KokkosSparse::SPGEMMAlgorithm spgemm_algo = KokkosSparse::SPGEMM_DEFAULT) {
+
+  /// \brief Create an SpGEMM handle.
+  ///
+  /// \param spgemm_algo the algorithm to use.
+  /// \param input_sorted whether the entries within each row of the input
+  ///   matrices A and B are sorted. Defaults to false (assume unsorted).
+  /// \param result_sorted whether the entries within each row of the output
+  ///   matrix C are required to be sorted. Defaults to true (always produce
+  ///   sorted output).
+  void create_spgemm_handle(KokkosSparse::SPGEMMAlgorithm spgemm_algo = KokkosSparse::SPGEMM_DEFAULT,
+                            bool input_sorted = false, bool result_sorted = true) {
     this->destroy_spgemm_handle();
     this->is_owner_of_the_spgemm_handle = true;
-    this->spgemmHandle                  = new SPGEMMHandleType(spgemm_algo);
+    this->spgemmHandle                  = new SPGEMMHandleType(spgemm_algo, input_sorted, result_sorted);
   }
   void destroy_spgemm_handle() {
     if (is_owner_of_the_spgemm_handle && this->spgemmHandle != NULL) {
@@ -903,4 +901,4 @@ class KokkosKernelsHandle {
 }  // namespace Experimental
 }  // namespace KokkosKernels
 
-#endif  //_KOKKOSKERNELHANDLE_HPP
+#endif  // KOKKOSKERNELS_HANDLE_HPP

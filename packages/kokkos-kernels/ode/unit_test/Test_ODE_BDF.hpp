@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #include <gtest/gtest.h>
 #include "KokkosKernels_TestUtils.hpp"
@@ -34,7 +21,7 @@ struct Logistic {
 
   const double r, K;
 
-  Logistic(double r_, double K_) : r(r_), K(K_){};
+  Logistic(double r_, double K_) : r(r_), K(K_) {}
 
   template <class vec_type1, class vec_type2>
   KOKKOS_FUNCTION void evaluate_function(const double /*t*/, const double /*dt*/, const vec_type1& y,
@@ -71,7 +58,7 @@ struct LotkaVolterra {
   const double alpha, beta, delta, gamma;
 
   LotkaVolterra(double alpha_, double beta_, double delta_, double gamma_)
-      : alpha(alpha_), beta(beta_), delta(delta_), gamma(gamma_){};
+      : alpha(alpha_), beta(beta_), delta(delta_), gamma(gamma_) {}
 
   template <class vec_type1, class vec_type2>
   KOKKOS_FUNCTION void evaluate_function(const double /*t*/, const double /*dt*/, const vec_type1& y,
@@ -126,6 +113,61 @@ struct StiffChemistry {
     jac(2, 2) = 0.0;
   }
 };
+
+// A sparse linear system whose BDF iteration matrix (I - dt*J) breaks
+// the static pivot selection of Gesv::StaticPivoting even though it is
+// non-singular (det(I - dt*J) = (1 + dt)^3) and well conditioned. It has
+// the sparsity structure of a chemistry network with an energy equation:
+// one dense row and otherwise nearly diagonal rows.
+//
+// Equations: y0' = -y0 - 10*y1
+//            y1' = -y1
+//            y2' = -1000*y0 - y2
+//
+// For dt >~ 0.001 the static pivoting proceeds as follows: row 2
+// is processed first (largest row max, 1000*dt) and takes column 0; row
+// 0 is processed next and takes column 1 since its diagonal entry was
+// scaled down by the column 0 maximum 1000*dt; row 1 has a single
+// nonzero entry, in the already taken column 1, so no pivot can be
+// assigned to it and the linear solve reports a failure.
+//
+// Solution: y0 = (y0(0) - 10*t*y1(0))*exp(-t)
+//           y1 = y1(0)*exp(-t)
+//           y2 = (y2(0) - 1000*t*y0(0) + 5000*t*t*y1(0))*exp(-t)
+struct SparseLinearSystem {
+  static constexpr int neqs = 3;
+
+  SparseLinearSystem() {}
+
+  template <class vec_type1, class vec_type2>
+  KOKKOS_FUNCTION void evaluate_function(const double /*t*/, const double /*dt*/, const vec_type1& y,
+                                         const vec_type2& f) const {
+    f(0) = -y(0) - 10.0 * y(1);
+    f(1) = -y(1);
+    f(2) = -1000.0 * y(0) - y(2);
+  }
+
+  template <class vec_type, class mat_type>
+  KOKKOS_FUNCTION void evaluate_jacobian(const double /*t*/, const double /*dt*/, const vec_type& /*y*/,
+                                         const mat_type& jac) const {
+    jac(0, 0) = -1.0;
+    jac(0, 1) = -10.0;
+    jac(0, 2) = 0.0;
+    jac(1, 0) = 0.0;
+    jac(1, 1) = -1.0;
+    jac(1, 2) = 0.0;
+    jac(2, 0) = -1000.0;
+    jac(2, 1) = 0.0;
+    jac(2, 2) = -1.0;
+  }
+
+  template <class vec_type1, class vec_type2>
+  KOKKOS_FUNCTION void solution(const double t, const vec_type1& y0, const vec_type2& y) const {
+    y(0) = (y0(0) - 10.0 * t * y0(1)) * Kokkos::exp(-t);
+    y(1) = y0(1) * Kokkos::exp(-t);
+    y(2) = (y0(2) - 1000.0 * t * y0(0) + 5000.0 * t * t * y0(1)) * Kokkos::exp(-t);
+  }
+};  // SparseLinearSystem
 
 template <class ode_type, KokkosODE::Experimental::BDF_type bdf_type, class vec_type, class mv_type, class mat_type,
           class scalar_type>
@@ -194,7 +236,7 @@ void test_BDF_Logistic() {
   using mv_type         = Kokkos::View<scalar_type**, execution_space>;
   using mat_type        = Kokkos::View<scalar_type**, execution_space>;
 
-  Kokkos::RangePolicy<execution_space> myPolicy(0, 1);
+  Kokkos::RangePolicy<execution_space> my_policy(0, 1);
   Logistic mySys(1, 1);
 
   constexpr int num_tests   = 7;
@@ -212,7 +254,7 @@ void test_BDF_Logistic() {
   scalar_type measured_order;
 
   // Test BDF1
-#if defined(HAVE_KOKKOSKERNELS_DEBUG)
+#ifndef NDEBUG
   std::cout << "\nBDF1 convergence test" << std::endl;
 #endif
   for (int idx = 0; idx < num_tests; idx++) {
@@ -223,7 +265,7 @@ void test_BDF_Logistic() {
 
     BDFSolve_wrapper<Logistic, KokkosODE::Experimental::BDF_type::BDF1, vec_type, mv_type, mat_type, scalar_type>
         solve_wrapper(mySys, t_start, t_end, num_steps[idx], y0, y_new, rhs, update, scale, y_vecs, kstack, temp, jac);
-    Kokkos::parallel_for(myPolicy, solve_wrapper);
+    Kokkos::parallel_for(my_policy, solve_wrapper);
     Kokkos::fence();
 
     auto y_new_h = Kokkos::create_mirror_view(y_new);
@@ -233,13 +275,13 @@ void test_BDF_Logistic() {
   }
   measured_order = Kokkos::pow(errors[num_tests - 1] / errors[0], 1.0 / (num_tests - 1));
   EXPECT_NEAR_KK_REL(measured_order, 2.0, 0.15);
-#if defined(HAVE_KOKKOSKERNELS_DEBUG)
+#ifndef NDEBUG
   std::cout << "expected ratio: 2, actual ratio: " << measured_order
             << ", order error=" << Kokkos::abs(measured_order - 2.0) / 2.0 << std::endl;
 #endif
 
   // Test BDF2
-#if defined(HAVE_KOKKOSKERNELS_DEBUG)
+#ifndef NDEBUG
   std::cout << "\nBDF2 convergence test" << std::endl;
 #endif
   for (int idx = 0; idx < num_tests; idx++) {
@@ -248,7 +290,7 @@ void test_BDF_Logistic() {
 
     BDFSolve_wrapper<Logistic, KokkosODE::Experimental::BDF_type::BDF2, vec_type, mv_type, mat_type, scalar_type>
         solve_wrapper(mySys, t_start, t_end, num_steps[idx], y0, y_new, rhs, update, scale, y_vecs, kstack, temp, jac);
-    Kokkos::parallel_for(myPolicy, solve_wrapper);
+    Kokkos::parallel_for(my_policy, solve_wrapper);
     Kokkos::fence();
 
     auto y_new_h = Kokkos::create_mirror_view(y_new);
@@ -258,13 +300,13 @@ void test_BDF_Logistic() {
   }
   measured_order = Kokkos::pow(errors[num_tests - 1] / errors[0], 1.0 / (num_tests - 1));
   EXPECT_NEAR_KK_REL(measured_order, 4.0, 0.15);
-#if defined(HAVE_KOKKOSKERNELS_DEBUG)
+#ifndef NDEBUG
   std::cout << "expected ratio: 4, actual ratio: " << measured_order
             << ", order error=" << Kokkos::abs(measured_order - 4.0) / 4.0 << std::endl;
 #endif
 
   // Test BDF3
-#if defined(HAVE_KOKKOSKERNELS_DEBUG)
+#ifndef NDEBUG
   std::cout << "\nBDF3 convergence test" << std::endl;
 #endif
   for (int idx = 0; idx < num_tests; idx++) {
@@ -273,7 +315,7 @@ void test_BDF_Logistic() {
 
     BDFSolve_wrapper<Logistic, KokkosODE::Experimental::BDF_type::BDF3, vec_type, mv_type, mat_type, scalar_type>
         solve_wrapper(mySys, t_start, t_end, num_steps[idx], y0, y_new, rhs, update, scale, y_vecs, kstack, temp, jac);
-    Kokkos::parallel_for(myPolicy, solve_wrapper);
+    Kokkos::parallel_for(my_policy, solve_wrapper);
     Kokkos::fence();
 
     auto y_new_h = Kokkos::create_mirror_view(y_new);
@@ -283,13 +325,13 @@ void test_BDF_Logistic() {
   }
   measured_order = Kokkos::pow(errors[num_tests - 1] / errors[0], 1.0 / (num_tests - 1));
   EXPECT_NEAR_KK_REL(measured_order, 8.0, 0.15);
-#if defined(HAVE_KOKKOSKERNELS_DEBUG)
+#ifndef NDEBUG
   std::cout << "expected ratio: 8, actual ratio: " << measured_order
             << ", order error=" << Kokkos::abs(measured_order - 8.0) / 8.0 << std::endl;
 #endif
 
   // Test BDF4
-#if defined(HAVE_KOKKOSKERNELS_DEBUG)
+#ifndef NDEBUG
   std::cout << "\nBDF4 convergence test" << std::endl;
 #endif
   for (int idx = 0; idx < num_tests; idx++) {
@@ -298,7 +340,7 @@ void test_BDF_Logistic() {
 
     BDFSolve_wrapper<Logistic, KokkosODE::Experimental::BDF_type::BDF4, vec_type, mv_type, mat_type, scalar_type>
         solve_wrapper(mySys, t_start, t_end, num_steps[idx], y0, y_new, rhs, update, scale, y_vecs, kstack, temp, jac);
-    Kokkos::parallel_for(myPolicy, solve_wrapper);
+    Kokkos::parallel_for(my_policy, solve_wrapper);
     Kokkos::fence();
 
     auto y_new_h = Kokkos::create_mirror_view(y_new);
@@ -307,13 +349,13 @@ void test_BDF_Logistic() {
     errors[idx] = Kokkos::abs(y_new_h(0) - 1 / (1 + Kokkos::exp(-t_end))) / Kokkos::abs(1 / (1 + Kokkos::exp(-t_end)));
   }
   measured_order = Kokkos::pow(errors[num_tests - 1] / errors[0], 1.0 / (num_tests - 1));
-#if defined(HAVE_KOKKOSKERNELS_DEBUG)
+#ifndef NDEBUG
   std::cout << "expected ratio: 16, actual ratio: " << measured_order
             << ", order error=" << Kokkos::abs(measured_order - 16.0) / 16.0 << std::endl;
 #endif
 
   // Test BDF5
-#if defined(HAVE_KOKKOSKERNELS_DEBUG)
+#ifndef NDEBUG
   std::cout << "\nBDF5 convergence test" << std::endl;
 #endif
   for (int idx = 0; idx < num_tests; idx++) {
@@ -322,7 +364,7 @@ void test_BDF_Logistic() {
 
     BDFSolve_wrapper<Logistic, KokkosODE::Experimental::BDF_type::BDF5, vec_type, mv_type, mat_type, scalar_type>
         solve_wrapper(mySys, t_start, t_end, num_steps[idx], y0, y_new, rhs, update, scale, y_vecs, kstack, temp, jac);
-    Kokkos::parallel_for(myPolicy, solve_wrapper);
+    Kokkos::parallel_for(my_policy, solve_wrapper);
     Kokkos::fence();
 
     auto y_new_h = Kokkos::create_mirror_view(y_new);
@@ -331,7 +373,7 @@ void test_BDF_Logistic() {
     errors[idx] = Kokkos::abs(y_new_h(0) - 1 / (1 + Kokkos::exp(-t_end))) / Kokkos::abs(1 / (1 + Kokkos::exp(-t_end)));
   }
   measured_order = Kokkos::pow(errors[num_tests - 1] / errors[0], 1.0 / (num_tests - 1));
-#if defined(HAVE_KOKKOSKERNELS_DEBUG)
+#ifndef NDEBUG
   std::cout << "expected ratio: 32, actual ratio: " << measured_order
             << ", order error=" << Kokkos::abs(measured_order - 32.0) / 32.0 << std::endl;
 #endif
@@ -362,10 +404,10 @@ void test_BDF_LotkaVolterra() {
   Kokkos::deep_copy(y0, 10.0);
   Kokkos::deep_copy(y_vecs, 10.0);
 
-  Kokkos::RangePolicy<execution_space> myPolicy(0, 1);
+  Kokkos::RangePolicy<execution_space> my_policy(0, 1);
   BDFSolve_wrapper<LotkaVolterra, KokkosODE::Experimental::BDF_type::BDF5, vec_type, mv_type, mat_type, scalar_type>
       solve_wrapper(mySys, t_start, t_end, 1000, y0, y_new, rhs, update, scale, y_vecs, kstack, temp, jac);
-  Kokkos::parallel_for(myPolicy, solve_wrapper);
+  Kokkos::parallel_for(my_policy, solve_wrapper);
 }
 
 template <class device_type, class scalar_type>
@@ -396,11 +438,86 @@ void test_BDF_StiffChemistry() {
   Kokkos::deep_copy(y0, y0_h);
   Kokkos::deep_copy(y_vecs, 0.0);
 
-  Kokkos::RangePolicy<execution_space> myPolicy(0, 1);
+  Kokkos::RangePolicy<execution_space> my_policy(0, 1);
   BDFSolve_wrapper<StiffChemistry, KokkosODE::Experimental::BDF_type::BDF5, vec_type, mv_type, mat_type, scalar_type>
       solve_wrapper(mySys, t_start, t_end, 110000, y0, y_new, rhs, update, scale, y_vecs, kstack, temp, jac);
-  Kokkos::parallel_for(myPolicy, solve_wrapper);
+  Kokkos::parallel_for(my_policy, solve_wrapper);
 }
+
+// Integrate the SparseLinearSystem, whose iteration matrix I - dt*J is
+// well conditioned but breaks the static pivotint used in
+// Gesv::StaticPivoting (see the comment on the struct above), and
+// compare against the analytical solution. With static pivoting every
+// Newton iteration reports a spurious linear solve failure: the fixed
+// step BDF1 solve never advances past the initial condition and the
+// adaptive BDFSolve accepts unconverged iterates. With partial
+// pivoting (Getrf/Getrs) both integrate the system accurately.
+template <class device_type, class scalar_type>
+void test_BDF_SparseLinearSystem() {
+  using execution_space = typename device_type::execution_space;
+  using vec_type        = Kokkos::View<scalar_type*, execution_space>;
+  using mv_type         = Kokkos::View<scalar_type**, execution_space>;
+  using mat_type        = Kokkos::View<scalar_type**, execution_space>;
+
+  SparseLinearSystem mySys{};
+
+  const scalar_type t_start = 0.0, t_end = 1.0;
+  vec_type y0("initial conditions", mySys.neqs), y_new("solution", mySys.neqs);
+  auto y0_h    = Kokkos::create_mirror_view(y0);
+  auto y_new_h = Kokkos::create_mirror_view(y_new);
+
+  // Reference solution
+  Kokkos::View<scalar_type*, Kokkos::HostSpace> y_ref_h("reference solution", mySys.neqs);
+  Kokkos::deep_copy(y0_h, 1.0);
+  mySys.solution(t_end, y0_h, y_ref_h);
+
+  Kokkos::RangePolicy<execution_space> my_policy(0, 1);
+
+  // Fixed order, fixed step BDF1 with dt = 0.1, large enough
+  // for the static pivoting to fail.
+  {
+    const int num_steps = 10;
+    vec_type rhs("rhs", mySys.neqs), update("update", mySys.neqs);
+    vec_type scale("scaling factors", mySys.neqs);
+    mat_type jac("jacobian", mySys.neqs, mySys.neqs), temp("temp storage", mySys.neqs, mySys.neqs + 4);
+    mv_type kstack("Startup RK vectors", 6, mySys.neqs);
+    mv_type y_vecs("history vectors", mySys.neqs, 1);
+
+    Kokkos::deep_copy(scale, 1);
+    Kokkos::deep_copy(y0, 1.0);
+
+    BDFSolve_wrapper<SparseLinearSystem, KokkosODE::Experimental::BDF_type::BDF1, vec_type, mv_type, mat_type,
+                     scalar_type>
+        solve_wrapper(mySys, t_start, t_end, num_steps, y0, y_new, rhs, update, scale, y_vecs, kstack, temp, jac);
+    Kokkos::parallel_for(my_policy, solve_wrapper);
+    Kokkos::fence();
+
+    Kokkos::deep_copy(y_new_h, y_new);
+    for (int eqIdx = 0; eqIdx < mySys.neqs; ++eqIdx) {
+      // BDF1 discretization error at dt=0.1 is ~5%; a failed linear
+      // solve leaves y at its initial condition, off by more than 100%.
+      EXPECT_NEAR_KK_REL(y_new_h(eqIdx), y_ref_h(eqIdx), 0.1);
+    }
+  }
+
+  // Adaptive time step BDFSolve
+  {
+    mat_type temp("buffer1", mySys.neqs, 23 + 2 * mySys.neqs + 4), temp2("buffer2", 6, 7);
+
+    Kokkos::deep_copy(y0, 1.0);
+    Kokkos::deep_copy(y_new, 0.0);
+
+    BDF_Solve_wrapper bdf_wrapper(mySys, t_start, t_end, scalar_type(0.0), (t_end - t_start) / 10, y0, y_new, temp,
+                                  temp2);
+    Kokkos::parallel_for(my_policy, bdf_wrapper);
+    Kokkos::fence();
+
+    Kokkos::deep_copy(y_new_h, y_new);
+    for (int eqIdx = 0; eqIdx < mySys.neqs; ++eqIdx) {
+      EXPECT_NEAR_KK_REL(y_new_h(eqIdx), y_ref_h(eqIdx), 1.0e-2);
+    }
+  }
+}  // test_BDF_SparseLinearSystem
 
 // template <class ode_type, KokkosODE::Experimental::BDF_type bdf_type,
 //           class vec_type, class mv_type, class mat_type, class scalar_type>
@@ -498,13 +615,13 @@ void test_BDF_StiffChemistry() {
 //   Kokkos::deep_copy(y0, 10.0);
 //   Kokkos::deep_copy(y_vecs, 10.0);
 
-//   Kokkos::RangePolicy<execution_space> myPolicy(0, num_solves);
+//   Kokkos::RangePolicy<execution_space> my_policy(0, num_solves);
 //   BDFSolve_parallel<LotkaVolterra, KokkosODE::Experimental::BDF_type::BDF5,
 //                     vec_type, mv_type, mat_type, scalar_type>
 //       solve_wrapper(mySys, t_start, t_end, 1000, y0, y_new, rhs, update,
 //       scale, y_vecs,
 //                     kstack, temp, jac);
-//   Kokkos::parallel_for(myPolicy, solve_wrapper);
+//   Kokkos::parallel_for(my_policy, solve_wrapper);
 
 //   Kokkos::fence();
 // }
@@ -670,7 +787,7 @@ template <class execution_space, class scalar_type>
 void test_adaptive_BDF_v2() {
   using vec_type = Kokkos::View<scalar_type*, execution_space>;
   using mat_type = Kokkos::View<scalar_type**, execution_space>;
-  using KAT      = Kokkos::ArithTraits<scalar_type>;
+  using KAT      = KokkosKernels::ArithTraits<scalar_type>;
 
   std::cout << "\n\n\nBDF_v2 test starting\n" << std::endl;
 
@@ -700,7 +817,7 @@ void test_BDF_adaptive_stiff() {
   using execution_space = typename Device::execution_space;
   using vec_type        = Kokkos::View<scalar_type*, execution_space>;
   using mat_type        = Kokkos::View<scalar_type**, execution_space>;
-  using KAT             = Kokkos::ArithTraits<scalar_type>;
+  using KAT             = KokkosKernels::ArithTraits<scalar_type>;
 
   StiffChemistry mySys{};
 
@@ -733,6 +850,7 @@ void test_BDF_adaptive_stiff() {
 TEST_F(TestCategory, BDF_Logistic_serial) { ::Test::test_BDF_Logistic<TestDevice, double>(); }
 TEST_F(TestCategory, BDF_LotkaVolterra_serial) { ::Test::test_BDF_LotkaVolterra<TestDevice, double>(); }
 TEST_F(TestCategory, BDF_StiffChemistry_serial) { ::Test::test_BDF_StiffChemistry<TestDevice, double>(); }
+TEST_F(TestCategory, BDF_SparseLinearSystem_serial) { ::Test::test_BDF_SparseLinearSystem<TestDevice, double>(); }
 // TEST_F(TestCategory, BDF_parallel_serial) {
 //   ::Test::test_BDF_parallel<TestDevice, double>();
 // }

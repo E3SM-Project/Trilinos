@@ -1,20 +1,5 @@
-/*
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
-*/
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOSPARSE_SPGEMM_SYMBOLIC_TPL_SPEC_DECL_HPP_
 #define KOKKOSPARSE_SPGEMM_SYMBOLIC_TPL_SPEC_DECL_HPP_
@@ -44,9 +29,11 @@ namespace Impl {
 // offsets and ordinals independently as either 16, 32 or 64-bit integers,
 // cusparse will just fail at runtime if you don't use 32 for both.
 
-#if (CUDA_VERSION >= 11040)
-// 11.4+ supports generic API with reuse (full symbolic/numeric separation)
-// However, its "symbolic" (cusparseSpGEMMreuse_nnz) does not populate C's
+#if (CUSPARSE_VERSION < 12710)
+// CUDA 11.x and 12.x have spgemm generic API with structure reuse (full symbolic/numeric
+// separation). Newer cuSPARSE versions deprecate the SpGEMMreuse entry points,
+// so those versions take the non-reuse generic path below instead.
+// Also note: its "symbolic" (cusparseSpGEMMreuse_nnz) does not populate C's
 // rowptrs.
 template <typename KernelHandle, typename lno_t, typename ConstRowMapType, typename ConstEntriesType,
           typename RowMapType>
@@ -58,7 +45,8 @@ void spgemm_symbolic_cusparse(KernelHandle *handle, lno_t m, lno_t n, lno_t k, c
   // computeRowptrs=false, and then again with computeRowptrs=true will not
   // duplicate any work.
   if (!handle->is_symbolic_called()) {
-    handle->create_cusparse_spgemm_handle(false, false);
+    // Note: this uses the algorithm choice in handle.
+    handle->create_cusparse_spgemm_handle(/* transA */ false, /* transB */ false);
     auto h = handle->get_cusparse_spgemm_handle();
 
     // Follow
@@ -72,61 +60,62 @@ void spgemm_symbolic_cusparse(KernelHandle *handle, lno_t m, lno_t n, lno_t k, c
     // which however is not available in this function. So we fake it with the
     // entries instead. Fortunately, it seems cupsarse does not access that in
     // the symbolic phase.
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseCreateCsr(&h->descr_A, m, n, entriesA.extent(0), (void *)row_mapA.data(),
-                                                (void *)entriesA.data(), (void *)entriesA.data() /*fake*/,
-                                                CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO,
-                                                h->scalarType));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(
+        cusparseCreateCsr(&h->descr_A, m, n, entriesA.extent(0), (void *)row_mapA.data(), (void *)entriesA.data(),
+                          (void *)entriesA.data() /*fake*/, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I,
+                          CUSPARSE_INDEX_BASE_ZERO, h->scalarType));
 
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseCreateCsr(&h->descr_B, n, k, entriesB.extent(0), (void *)row_mapB.data(),
-                                                (void *)entriesB.data(), (void *)entriesB.data() /*fake*/,
-                                                CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO,
-                                                h->scalarType));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(
+        cusparseCreateCsr(&h->descr_B, n, k, entriesB.extent(0), (void *)row_mapB.data(), (void *)entriesB.data(),
+                          (void *)entriesB.data() /*fake*/, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I,
+                          CUSPARSE_INDEX_BASE_ZERO, h->scalarType));
 
 #if CUDA_VERSION >= 12020
     // at some point cusparseCreateCsr started to need a non-null row-pointer
     // array, even if the operation that consumed the handle doesn't need to
     // read it. This was observed on a system with CUDA 12.2, but it may have
     // started earlier.
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseCreateCsr(&h->descr_C, m, k, 0, (void *)row_mapC.data(), nullptr, nullptr,
-                                                CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO,
-                                                h->scalarType));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseCreateCsr(&h->descr_C, m, k, 0, (void *)row_mapC.data(), nullptr,
+                                                           nullptr, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I,
+                                                           CUSPARSE_INDEX_BASE_ZERO, h->scalarType));
 #else
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseCreateCsr(&h->descr_C, m, k, 0, nullptr, nullptr, nullptr, CUSPARSE_INDEX_32I,
-                                                CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, h->scalarType));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseCreateCsr(&h->descr_C, m, k, 0, nullptr, nullptr, nullptr,
+                                                           CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I,
+                                                           CUSPARSE_INDEX_BASE_ZERO, h->scalarType));
 #endif
 
     //----------------------------------------------------------------------
     // ask bufferSize1 bytes for external memory
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseSpGEMMreuse_workEstimation(h->cusparseHandle, h->opA, h->opB, h->descr_A,
-                                                                 h->descr_B, h->descr_C, h->alg, h->spgemmDescr,
-                                                                 &bufferSize1, nullptr));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseSpGEMMreuse_workEstimation(h->cusparseHandle, h->opA, h->opB,
+                                                                            h->descr_A, h->descr_B, h->descr_C, h->alg,
+                                                                            h->spgemmDescr, &bufferSize1, nullptr));
 
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMalloc((void **)&buffer1, bufferSize1));
     // inspect matrices A and B to understand the memory requirement for the
     // next step
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseSpGEMMreuse_workEstimation(h->cusparseHandle, h->opA, h->opB, h->descr_A,
-                                                                 h->descr_B, h->descr_C, h->alg, h->spgemmDescr,
-                                                                 &bufferSize1, buffer1));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseSpGEMMreuse_workEstimation(h->cusparseHandle, h->opA, h->opB,
+                                                                            h->descr_A, h->descr_B, h->descr_C, h->alg,
+                                                                            h->spgemmDescr, &bufferSize1, buffer1));
 
     //----------------------------------------------------------------------
     // Compute nnz of C
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseSpGEMMreuse_nnz(h->cusparseHandle, h->opA, h->opB, h->descr_A, h->descr_B,
-                                                      h->descr_C, h->alg, h->spgemmDescr, &bufferSize2, nullptr,
-                                                      &h->bufferSize3, nullptr, &h->bufferSize4, nullptr));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseSpGEMMreuse_nnz(
+        h->cusparseHandle, h->opA, h->opB, h->descr_A, h->descr_B, h->descr_C, h->alg, h->spgemmDescr, &bufferSize2,
+        nullptr, &h->bufferSize3, nullptr, &h->bufferSize4, nullptr));
 
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMalloc((void **)&buffer2, bufferSize2));
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMalloc((void **)&h->buffer3, h->bufferSize3));
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMalloc((void **)&h->buffer4, h->bufferSize4));
 
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseSpGEMMreuse_nnz(h->cusparseHandle, h->opA, h->opB, h->descr_A, h->descr_B,
-                                                      h->descr_C, h->alg, h->spgemmDescr, &bufferSize2, buffer2,
-                                                      &h->bufferSize3, h->buffer3, &h->bufferSize4, h->buffer4));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseSpGEMMreuse_nnz(
+        h->cusparseHandle, h->opA, h->opB, h->descr_A, h->descr_B, h->descr_C, h->alg, h->spgemmDescr, &bufferSize2,
+        buffer2, &h->bufferSize3, h->buffer3, &h->bufferSize4, h->buffer4));
 
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaFree(buffer2));
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaFree(buffer1));
 
     int64_t C_nrow, C_ncol, C_nnz;
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseSpMatGetSize(h->descr_C, &C_nrow, &C_ncol, &C_nnz));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseSpMatGetSize(h->descr_C, &C_nrow, &C_ncol, &C_nnz));
     if (C_nnz > std::numeric_limits<int>::max()) {
       throw std::runtime_error("nnz of C overflowed over 32-bit int\n");
     }
@@ -145,15 +134,16 @@ void spgemm_symbolic_cusparse(KernelHandle *handle, lno_t m, lno_t n, lno_t k, c
     // we must use dummy versions and then discard them.
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMalloc((void **)&dummyEntries, C_nnz * sizeof(Ordinal)));
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMalloc((void **)&dummyValues, C_nnz * sizeof(Scalar)));
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseCsrSetPointers(h->descr_C, row_mapC.data(), dummyEntries, dummyValues));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(
+        cusparseCsrSetPointers(h->descr_C, row_mapC.data(), dummyEntries, dummyValues));
     //--------------------------------------------------------------------------
 
     cusparseSpGEMMreuse_copy(h->cusparseHandle, h->opA, h->opB, h->descr_A, h->descr_B, h->descr_C, h->alg,
                              h->spgemmDescr, &h->bufferSize5, nullptr);
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMalloc((void **)&h->buffer5, h->bufferSize5));
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseSpGEMMreuse_copy(h->cusparseHandle, h->opA, h->opB, h->descr_A, h->descr_B,
-                                                       h->descr_C, h->alg, h->spgemmDescr, &h->bufferSize5,
-                                                       h->buffer5));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseSpGEMMreuse_copy(h->cusparseHandle, h->opA, h->opB, h->descr_A,
+                                                                  h->descr_B, h->descr_C, h->alg, h->spgemmDescr,
+                                                                  &h->bufferSize5, h->buffer5));
     if (!handle->get_c_nnz()) {
       // cuSPARSE does not populate C rowptrs if C has no entries
       Kokkos::deep_copy(typename KernelHandle::HandleExecSpace(), row_mapC, Offset(0));
@@ -164,21 +154,24 @@ void spgemm_symbolic_cusparse(KernelHandle *handle, lno_t m, lno_t n, lno_t k, c
   }
 }
 
-#elif (CUDA_VERSION >= 11000)
-// 11.0-11.3 supports only the generic API, but not reuse.
+#else
+// cuSPARSE versions that deprecate SpGEMMreuse use this SpGEMM interface instead.
 template <typename KernelHandle, typename lno_t, typename ConstRowMapType, typename ConstEntriesType,
           typename RowMapType>
 void spgemm_symbolic_cusparse(KernelHandle *handle, lno_t m, lno_t n, lno_t k, const ConstRowMapType &row_mapA,
                               const ConstEntriesType &entriesA, const ConstRowMapType &row_mapB,
                               const ConstEntriesType &entriesB, const RowMapType &row_mapC, bool computeRowptrs) {
-  using scalar_type      = typename KernelHandle::nnz_scalar_t;
-  using ordinal_type     = typename KernelHandle::nnz_lno_t;
-  const auto alpha       = Kokkos::ArithTraits<scalar_type>::one();
-  const auto beta        = Kokkos::ArithTraits<scalar_type>::zero();
-  void *dummyValues_AB   = nullptr;
-  bool firstSymbolicCall = false;
+  using scalar_type       = typename KernelHandle::nnz_scalar_t;
+  using ordinal_type      = typename KernelHandle::nnz_lno_t;
+  const auto alpha        = KokkosKernels::ArithTraits<scalar_type>::one();
+  const auto beta         = KokkosKernels::ArithTraits<scalar_type>::zero();
+  void *dummyValues_AB    = nullptr;
+  bool firstSymbolicCall  = false;
+  auto algKK              = handle->get_algorithm_type();
+  bool needEstimateMemory = algKK == SPGEMM_CUSPARSE_ALG2 || algKK == SPGEMM_CUSPARSE_ALG3;
   if (!handle->is_symbolic_called()) {
-    handle->create_cusparse_spgemm_handle(false, false);
+    // Note: this uses the algorithm choice in handle.
+    handle->create_cusparse_spgemm_handle(/* transA */ false, /* transB */ false);
     auto h = handle->get_cusparse_spgemm_handle();
 
     // Follow
@@ -194,40 +187,60 @@ void spgemm_symbolic_cusparse(KernelHandle *handle, lno_t m, lno_t n, lno_t k, c
     KOKKOS_IMPL_CUDA_SAFE_CALL(
         cudaMalloc(&dummyValues_AB, sizeof(scalar_type) * std::max(entriesA.extent(0), entriesB.extent(0))));
 
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseCreateCsr(&h->descr_A, m, n, entriesA.extent(0), (void *)row_mapA.data(),
-                                                (void *)entriesA.data(), dummyValues_AB, CUSPARSE_INDEX_32I,
-                                                CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, h->scalarType));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseCreateCsr(
+        &h->descr_A, m, n, entriesA.extent(0), (void *)row_mapA.data(), (void *)entriesA.data(), dummyValues_AB,
+        CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, h->scalarType));
 
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseCreateCsr(&h->descr_B, n, k, entriesB.extent(0), (void *)row_mapB.data(),
-                                                (void *)entriesB.data(), dummyValues_AB, CUSPARSE_INDEX_32I,
-                                                CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, h->scalarType));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseCreateCsr(
+        &h->descr_B, n, k, entriesB.extent(0), (void *)row_mapB.data(), (void *)entriesB.data(), dummyValues_AB,
+        CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, h->scalarType));
 
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseCreateCsr(&h->descr_C, m, k, 0, row_mapC.data(), nullptr, nullptr,
-                                                CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO,
-                                                h->scalarType));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseCreateCsr(&h->descr_C, m, k, 0, row_mapC.data(), nullptr, nullptr,
+                                                           CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I,
+                                                           CUSPARSE_INDEX_BASE_ZERO, h->scalarType));
 
     //----------------------------------------------------------------------
     // query workEstimation buffer size, allocate, then call again with buffer.
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseSpGEMM_workEstimation(h->cusparseHandle, h->opA, h->opB, &alpha, h->descr_A,
-                                                            h->descr_B, &beta, h->descr_C, h->scalarType, h->alg,
-                                                            h->spgemmDescr, &h->bufferSize3, nullptr));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(
+        cusparseSpGEMM_workEstimation(h->cusparseHandle, h->opA, h->opB, &alpha, h->descr_A, h->descr_B, &beta,
+                                      h->descr_C, h->scalarType, h->alg, h->spgemmDescr, &h->bufferSize3, nullptr));
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMalloc((void **)&h->buffer3, h->bufferSize3));
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseSpGEMM_workEstimation(h->cusparseHandle, h->opA, h->opB, &alpha, h->descr_A,
-                                                            h->descr_B, &beta, h->descr_C, h->scalarType, h->alg,
-                                                            h->spgemmDescr, &h->bufferSize3, h->buffer3));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(
+        cusparseSpGEMM_workEstimation(h->cusparseHandle, h->opA, h->opB, &alpha, h->descr_A, h->descr_B, &beta,
+                                      h->descr_C, h->scalarType, h->alg, h->spgemmDescr, &h->bufferSize3, h->buffer3));
 
+    if (needEstimateMemory) {
+      constexpr float chunk_fraction = 0.25;
+      // First estimateMemory call computes the size for tempBuffer
+      size_t tempBufferSize = 0;
+      KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseSpGEMM_estimateMemory(
+          h->cusparseHandle, h->opA, h->opB, &alpha, h->descr_A, h->descr_B, &beta, h->descr_C, h->scalarType, h->alg,
+          h->spgemmDescr, chunk_fraction, &tempBufferSize, NULL, NULL));
+
+      void *tempBuffer = nullptr;
+      KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMalloc((void **)&tempBuffer, tempBufferSize));
+
+      // Second estimateMemory call computes bufferSize4
+      KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseSpGEMM_estimateMemory(
+          h->cusparseHandle, h->opA, h->opB, &alpha, h->descr_A, h->descr_B, &beta, h->descr_C, h->scalarType, h->alg,
+          h->spgemmDescr, chunk_fraction, &tempBufferSize, tempBuffer, &h->bufferSize4));
+      // Done with tempBuffer
+      KOKKOS_IMPL_CUDA_SAFE_CALL(cudaFree(tempBuffer));
+    } else {
+      // First compute call computes bufferSize4
+      KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseSpGEMM_compute(h->cusparseHandle, h->opA, h->opB, &alpha, h->descr_A,
+                                                                  h->descr_B, &beta, h->descr_C, h->scalarType, h->alg,
+                                                                  h->spgemmDescr, &h->bufferSize4, nullptr));
+    }
     //----------------------------------------------------------------------
     // query compute buffer size, allocate, then call again with buffer.
 
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseSpGEMM_compute(h->cusparseHandle, h->opA, h->opB, &alpha, h->descr_A, h->descr_B,
-                                                     &beta, h->descr_C, h->scalarType, CUSPARSE_SPGEMM_DEFAULT,
-                                                     h->spgemmDescr, &h->bufferSize4, nullptr));
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMalloc((void **)&h->buffer4, h->bufferSize4));
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseSpGEMM_compute(h->cusparseHandle, h->opA, h->opB, &alpha, h->descr_A, h->descr_B,
-                                                     &beta, h->descr_C, h->scalarType, CUSPARSE_SPGEMM_DEFAULT,
-                                                     h->spgemmDescr, &h->bufferSize4, h->buffer4));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseSpGEMM_compute(h->cusparseHandle, h->opA, h->opB, &alpha, h->descr_A,
+                                                                h->descr_B, &beta, h->descr_C, h->scalarType, h->alg,
+                                                                h->spgemmDescr, &h->bufferSize4, h->buffer4));
     int64_t C_nrow, C_ncol, C_nnz;
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseSpMatGetSize(h->descr_C, &C_nrow, &C_ncol, &C_nnz));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseSpMatGetSize(h->descr_C, &C_nrow, &C_ncol, &C_nnz));
     if (C_nnz > std::numeric_limits<int>::max()) {
       throw std::runtime_error("nnz of C overflowed over 32-bit int\n");
     }
@@ -245,20 +258,20 @@ void spgemm_symbolic_cusparse(KernelHandle *handle, lno_t m, lno_t n, lno_t k, c
       // handle, so we can reuse those.
       KOKKOS_IMPL_CUDA_SAFE_CALL(
           cudaMalloc(&dummyValues_AB, sizeof(scalar_type) * std::max(entriesA.extent(0), entriesB.extent(0))));
-      KOKKOS_CUSPARSE_SAFE_CALL(
+      KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(
           cusparseCsrSetPointers(h->descr_A, (void *)row_mapA.data(), (void *)entriesA.data(), dummyValues_AB));
-      KOKKOS_CUSPARSE_SAFE_CALL(
+      KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(
           cusparseCsrSetPointers(h->descr_B, (void *)row_mapB.data(), (void *)entriesB.data(), dummyValues_AB));
     }
     void *dummyEntries_C, *dummyValues_C;
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMalloc(&dummyEntries_C, sizeof(ordinal_type) * C_nnz));
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMalloc(&dummyValues_C, sizeof(scalar_type) * C_nnz));
-    KOKKOS_CUSPARSE_SAFE_CALL(
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(
         cusparseCsrSetPointers(h->descr_C, (void *)row_mapC.data(), dummyEntries_C, dummyValues_C));
 
-    KOKKOS_CUSPARSE_SAFE_CALL(cusparseSpGEMM_copy(h->cusparseHandle, h->opA, h->opB, &alpha, h->descr_A, h->descr_B,
-                                                  &beta, h->descr_C, h->scalarType, CUSPARSE_SPGEMM_DEFAULT,
-                                                  h->spgemmDescr));
+    KOKKOSSPARSE_IMPL_CUSPARSE_SAFE_CALL(cusparseSpGEMM_copy(h->cusparseHandle, h->opA, h->opB, &alpha, h->descr_A,
+                                                             h->descr_B, &beta, h->descr_C, h->scalarType, h->alg,
+                                                             h->spgemmDescr));
 
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaFree(dummyValues_C));
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaFree(dummyEntries_C));
@@ -266,53 +279,10 @@ void spgemm_symbolic_cusparse(KernelHandle *handle, lno_t m, lno_t n, lno_t k, c
   }
   KOKKOS_IMPL_CUDA_SAFE_CALL(cudaFree(dummyValues_AB));
 }
-
-#else
-// 10.x supports the pre-generic interface (cusparseXcsrgemmNnz). It always
-// populates C rowptrs.
-template <typename KernelHandle, typename lno_t, typename ConstRowMapType, typename ConstEntriesType,
-          typename RowMapType>
-void spgemm_symbolic_cusparse(KernelHandle *handle, lno_t m, lno_t n, lno_t k, const ConstRowMapType &row_mapA,
-                              const ConstEntriesType &entriesA, const ConstRowMapType &row_mapB,
-                              const ConstEntriesType &entriesB, const RowMapType &row_mapC, bool /* computeRowptrs */) {
-  // using scalar_type = typename KernelHandle::nnz_scalar_t;
-  using size_type = typename KernelHandle::size_type;
-  if (handle->are_rowptrs_computed()) return;
-  handle->create_cusparse_spgemm_handle(false, false);
-  auto h   = handle->get_cusparse_spgemm_handle();
-  int nnzA = entriesA.extent(0);
-  int nnzB = entriesB.extent(0);
-
-  int baseC, nnzC;
-  int *nnzTotalDevHostPtr = &nnzC;
-
-  // In empty (zero entries) matrix case, cusparse does not populate rowptrs to
-  // zeros
-  if (m == 0 || n == 0 || k == 0 || entriesA.extent(0) == size_type(0) || entriesB.extent(0) == size_type(0)) {
-    Kokkos::deep_copy(typename KernelHandle::HandleExecSpace(), row_mapC, size_type(0));
-    nnzC = 0;
-  } else {
-    KOKKOS_CUSPARSE_SAFE_CALL(
-        cusparseXcsrgemmNnz(h->cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE, CUSPARSE_OPERATION_NON_TRANSPOSE, m, k,
-                            n, h->generalDescr, nnzA, row_mapA.data(), entriesA.data(), h->generalDescr, nnzB,
-                            row_mapB.data(), entriesB.data(), h->generalDescr, row_mapC.data(), nnzTotalDevHostPtr));
-    if (nullptr != nnzTotalDevHostPtr) {
-      nnzC = *nnzTotalDevHostPtr;
-    } else {
-      KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMemcpy(&nnzC, row_mapC.data() + m, sizeof(int), cudaMemcpyDeviceToHost));
-      KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMemcpy(&baseC, row_mapC.data(), sizeof(int), cudaMemcpyDeviceToHost));
-      nnzC -= baseC;
-    }
-  }
-  handle->set_c_nnz(nnzC);
-  handle->set_call_symbolic();
-  handle->set_computed_rowptrs();
-}
-
 #endif
 
-#define SPGEMM_SYMBOLIC_DECL_CUSPARSE(SCALAR, MEMSPACE, TPL_AVAIL)                                                     \
-  template <>                                                                                                          \
+#define SPGEMM_SYMBOLIC_DECL_CUSPARSE(SCALAR, MEMSPACE)                                                                \
+  template <bool ETI_SPEC_AVAIL>                                                                                       \
   struct SPGEMM_SYMBOLIC<                                                                                              \
       KokkosKernels::Experimental::KokkosKernelsHandle<const int, const int, const SCALAR, Kokkos::Cuda, MEMSPACE,     \
                                                        MEMSPACE>,                                                      \
@@ -326,7 +296,7 @@ void spgemm_symbolic_cusparse(KernelHandle *handle, lno_t m, lno_t n, lno_t k, c
                    Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                           \
       Kokkos::View<int *, KokkosKernels::default_layout, Kokkos::Device<Kokkos::Cuda, MEMSPACE>,                       \
                    Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                           \
-      true, TPL_AVAIL> {                                                                                               \
+      true, ETI_SPEC_AVAIL> {                                                                                          \
     using KernelHandle = KokkosKernels::Experimental::KokkosKernelsHandle<const int, const int, const SCALAR,          \
                                                                           Kokkos::Cuda, MEMSPACE, MEMSPACE>;           \
     using c_int_view_t =                                                                                               \
@@ -338,7 +308,8 @@ void spgemm_symbolic_cusparse(KernelHandle *handle, lno_t m, lno_t n, lno_t k, c
                                 typename KernelHandle::nnz_lno_t n, typename KernelHandle::nnz_lno_t k,                \
                                 c_int_view_t row_mapA, c_int_view_t entriesA, bool, c_int_view_t row_mapB,             \
                                 c_int_view_t entriesB, bool, int_view_t row_mapC, bool computeRowptrs) {               \
-      std::string label = "KokkosSparse::spgemm_symbolic[TPL_CUSPARSE," + Kokkos::ArithTraits<SCALAR>::name() + "]";   \
+      std::string label =                                                                                              \
+          "KokkosSparse::spgemm_symbolic[TPL_CUSPARSE," + KokkosKernels::ArithTraits<SCALAR>::name() + "]";            \
       Kokkos::Profiling::pushRegion(label);                                                                            \
       spgemm_symbolic_cusparse(handle->get_spgemm_handle(), m, n, k, row_mapA, entriesA, row_mapB, entriesB, row_mapC, \
                                computeRowptrs);                                                                        \
@@ -346,19 +317,14 @@ void spgemm_symbolic_cusparse(KernelHandle *handle, lno_t m, lno_t n, lno_t k, c
     }                                                                                                                  \
   };
 
-#define SPGEMM_SYMBOLIC_DECL_CUSPARSE_S(SCALAR, TPL_AVAIL)            \
-  SPGEMM_SYMBOLIC_DECL_CUSPARSE(SCALAR, Kokkos::CudaSpace, TPL_AVAIL) \
-  SPGEMM_SYMBOLIC_DECL_CUSPARSE(SCALAR, Kokkos::CudaUVMSpace, TPL_AVAIL)
+#define SPGEMM_SYMBOLIC_DECL_CUSPARSE_S(SCALAR)            \
+  SPGEMM_SYMBOLIC_DECL_CUSPARSE(SCALAR, Kokkos::CudaSpace) \
+  SPGEMM_SYMBOLIC_DECL_CUSPARSE(SCALAR, Kokkos::CudaUVMSpace)
 
-SPGEMM_SYMBOLIC_DECL_CUSPARSE_S(float, true)
-SPGEMM_SYMBOLIC_DECL_CUSPARSE_S(double, true)
-SPGEMM_SYMBOLIC_DECL_CUSPARSE_S(Kokkos::complex<float>, true)
-SPGEMM_SYMBOLIC_DECL_CUSPARSE_S(Kokkos::complex<double>, true)
-
-SPGEMM_SYMBOLIC_DECL_CUSPARSE_S(float, false)
-SPGEMM_SYMBOLIC_DECL_CUSPARSE_S(double, false)
-SPGEMM_SYMBOLIC_DECL_CUSPARSE_S(Kokkos::complex<float>, false)
-SPGEMM_SYMBOLIC_DECL_CUSPARSE_S(Kokkos::complex<double>, false)
+SPGEMM_SYMBOLIC_DECL_CUSPARSE_S(float)
+SPGEMM_SYMBOLIC_DECL_CUSPARSE_S(double)
+SPGEMM_SYMBOLIC_DECL_CUSPARSE_S(Kokkos::complex<float>)
+SPGEMM_SYMBOLIC_DECL_CUSPARSE_S(Kokkos::complex<double>)
 
 #endif
 
@@ -407,8 +373,8 @@ void spgemm_symbolic_rocsparse(KernelHandle *handle, typename KernelHandle::nnz_
   // alpha, beta are on host, but since we use singleton on the rocsparse
   // handle, we save/restore the pointer mode to not interference with
   // others' use
-  const auto alpha = Kokkos::ArithTraits<scalar_type>::one();
-  const auto beta  = Kokkos::ArithTraits<scalar_type>::zero();
+  const auto alpha = KokkosKernels::ArithTraits<scalar_type>::one();
+  const auto beta  = KokkosKernels::ArithTraits<scalar_type>::zero();
   rocsparse_pointer_mode oldPtrMode;
 
   KOKKOSSPARSE_IMPL_ROCSPARSE_SAFE_CALL(rocsparse_get_pointer_mode(h->rocsparseHandle, &oldPtrMode));
@@ -440,52 +406,48 @@ void spgemm_symbolic_rocsparse(KernelHandle *handle, typename KernelHandle::nnz_
   handle->set_computed_rowptrs();
 }
 
-#define SPGEMM_SYMBOLIC_DECL_ROCSPARSE(SCALAR, TPL_AVAIL)                                                             \
-  template <>                                                                                                         \
-  struct SPGEMM_SYMBOLIC<                                                                                             \
-      KokkosKernels::Experimental::KokkosKernelsHandle<const int, const int, const SCALAR, Kokkos::HIP,               \
-                                                       Kokkos::HIPSpace, Kokkos::HIPSpace>,                           \
-      Kokkos::View<const int *, KokkosKernels::default_layout, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>,         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                          \
-      Kokkos::View<const int *, KokkosKernels::default_layout, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>,         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                          \
-      Kokkos::View<const int *, KokkosKernels::default_layout, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>,         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                          \
-      Kokkos::View<const int *, KokkosKernels::default_layout, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>,         \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                          \
-      Kokkos::View<int *, KokkosKernels::default_layout, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>,               \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                          \
-      true, TPL_AVAIL> {                                                                                              \
-    using KernelHandle =                                                                                              \
-        KokkosKernels::Experimental::KokkosKernelsHandle<const int, const int, const SCALAR, Kokkos::HIP,             \
-                                                         Kokkos::HIPSpace, Kokkos::HIPSpace>;                         \
-    using c_int_view_t =                                                                                              \
-        Kokkos::View<const int *, KokkosKernels::default_layout, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>,       \
-                     Kokkos::MemoryTraits<Kokkos::Unmanaged>>;                                                        \
-    using int_view_t =                                                                                                \
-        Kokkos::View<int *, KokkosKernels::default_layout, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>,             \
-                     Kokkos::MemoryTraits<Kokkos::Unmanaged>>;                                                        \
-    static void spgemm_symbolic(KernelHandle *handle, typename KernelHandle::nnz_lno_t m,                             \
-                                typename KernelHandle::nnz_lno_t n, typename KernelHandle::nnz_lno_t k,               \
-                                c_int_view_t row_mapA, c_int_view_t entriesA, bool, c_int_view_t row_mapB,            \
-                                c_int_view_t entriesB, bool, int_view_t row_mapC, bool) {                             \
-      std::string label = "KokkosSparse::spgemm_symbolic[TPL_ROCSPARSE," + Kokkos::ArithTraits<SCALAR>::name() + "]"; \
-      Kokkos::Profiling::pushRegion(label);                                                                           \
-      spgemm_symbolic_rocsparse(handle->get_spgemm_handle(), m, n, k, row_mapA, entriesA, row_mapB, entriesB,         \
-                                row_mapC);                                                                            \
-      Kokkos::Profiling::popRegion();                                                                                 \
-    }                                                                                                                 \
+#define SPGEMM_SYMBOLIC_DECL_ROCSPARSE(SCALAR)                                                                  \
+  template <bool ETI_SPEC_AVAIL>                                                                                \
+  struct SPGEMM_SYMBOLIC<                                                                                       \
+      KokkosKernels::Experimental::KokkosKernelsHandle<const int, const int, const SCALAR, Kokkos::HIP,         \
+                                                       Kokkos::HIPSpace, Kokkos::HIPSpace>,                     \
+      Kokkos::View<const int *, KokkosKernels::default_layout, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>,   \
+                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                    \
+      Kokkos::View<const int *, KokkosKernels::default_layout, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>,   \
+                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                    \
+      Kokkos::View<const int *, KokkosKernels::default_layout, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>,   \
+                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                    \
+      Kokkos::View<const int *, KokkosKernels::default_layout, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>,   \
+                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                    \
+      Kokkos::View<int *, KokkosKernels::default_layout, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>,         \
+                   Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                    \
+      true, ETI_SPEC_AVAIL> {                                                                                   \
+    using KernelHandle =                                                                                        \
+        KokkosKernels::Experimental::KokkosKernelsHandle<const int, const int, const SCALAR, Kokkos::HIP,       \
+                                                         Kokkos::HIPSpace, Kokkos::HIPSpace>;                   \
+    using c_int_view_t =                                                                                        \
+        Kokkos::View<const int *, KokkosKernels::default_layout, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>, \
+                     Kokkos::MemoryTraits<Kokkos::Unmanaged>>;                                                  \
+    using int_view_t =                                                                                          \
+        Kokkos::View<int *, KokkosKernels::default_layout, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>,       \
+                     Kokkos::MemoryTraits<Kokkos::Unmanaged>>;                                                  \
+    static void spgemm_symbolic(KernelHandle *handle, typename KernelHandle::nnz_lno_t m,                       \
+                                typename KernelHandle::nnz_lno_t n, typename KernelHandle::nnz_lno_t k,         \
+                                c_int_view_t row_mapA, c_int_view_t entriesA, bool, c_int_view_t row_mapB,      \
+                                c_int_view_t entriesB, bool, int_view_t row_mapC, bool) {                       \
+      std::string label =                                                                                       \
+          "KokkosSparse::spgemm_symbolic[TPL_ROCSPARSE," + KokkosKernels::ArithTraits<SCALAR>::name() + "]";    \
+      Kokkos::Profiling::pushRegion(label);                                                                     \
+      spgemm_symbolic_rocsparse(handle->get_spgemm_handle(), m, n, k, row_mapA, entriesA, row_mapB, entriesB,   \
+                                row_mapC);                                                                      \
+      Kokkos::Profiling::popRegion();                                                                           \
+    }                                                                                                           \
   };
 
-SPGEMM_SYMBOLIC_DECL_ROCSPARSE(float, false)
-SPGEMM_SYMBOLIC_DECL_ROCSPARSE(double, false)
-SPGEMM_SYMBOLIC_DECL_ROCSPARSE(Kokkos::complex<float>, false)
-SPGEMM_SYMBOLIC_DECL_ROCSPARSE(Kokkos::complex<double>, false)
-
-SPGEMM_SYMBOLIC_DECL_ROCSPARSE(float, true)
-SPGEMM_SYMBOLIC_DECL_ROCSPARSE(double, true)
-SPGEMM_SYMBOLIC_DECL_ROCSPARSE(Kokkos::complex<float>, true)
-SPGEMM_SYMBOLIC_DECL_ROCSPARSE(Kokkos::complex<double>, true)
+SPGEMM_SYMBOLIC_DECL_ROCSPARSE(float)
+SPGEMM_SYMBOLIC_DECL_ROCSPARSE(double)
+SPGEMM_SYMBOLIC_DECL_ROCSPARSE(Kokkos::complex<float>)
+SPGEMM_SYMBOLIC_DECL_ROCSPARSE(Kokkos::complex<double>)
 #endif
 
 #ifdef KOKKOSKERNELS_ENABLE_TPL_MKL
@@ -532,8 +494,8 @@ void spgemm_symbolic_mkl(KernelHandle *handle, typename KernelHandle::nnz_lno_t 
   handle->set_c_nnz(rowptrC(m));
 }
 
-#define SPGEMM_SYMBOLIC_DECL_MKL(SCALAR, EXEC, TPL_AVAIL)                                                              \
-  template <>                                                                                                          \
+#define SPGEMM_SYMBOLIC_DECL_MKL(SCALAR, EXEC)                                                                         \
+  template <bool ETI_SPEC_AVAIL>                                                                                       \
   struct SPGEMM_SYMBOLIC<                                                                                              \
       KokkosKernels::Experimental::KokkosKernelsHandle<const MKL_INT, const MKL_INT, const SCALAR, EXEC,               \
                                                        Kokkos::HostSpace, Kokkos::HostSpace>,                          \
@@ -547,7 +509,7 @@ void spgemm_symbolic_mkl(KernelHandle *handle, typename KernelHandle::nnz_lno_t 
                    Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                           \
       Kokkos::View<MKL_INT *, KokkosKernels::default_layout, Kokkos::Device<EXEC, Kokkos::HostSpace>,                  \
                    Kokkos::MemoryTraits<Kokkos::Unmanaged>>,                                                           \
-      true, TPL_AVAIL> {                                                                                               \
+      true, ETI_SPEC_AVAIL> {                                                                                          \
     using KernelHandle = KokkosKernels::Experimental::KokkosKernelsHandle<const MKL_INT, const MKL_INT, const SCALAR,  \
                                                                           EXEC, Kokkos::HostSpace, Kokkos::HostSpace>; \
     using c_int_view_t =                                                                                               \
@@ -559,22 +521,18 @@ void spgemm_symbolic_mkl(KernelHandle *handle, typename KernelHandle::nnz_lno_t 
                                 typename KernelHandle::nnz_lno_t n, typename KernelHandle::nnz_lno_t k,                \
                                 c_int_view_t row_mapA, c_int_view_t entriesA, bool, c_int_view_t row_mapB,             \
                                 c_int_view_t entriesB, bool, int_view_t row_mapC, bool) {                              \
-      std::string label = "KokkosSparse::spgemm_symbolic[TPL_MKL," + Kokkos::ArithTraits<SCALAR>::name() + "]";        \
+      std::string label = "KokkosSparse::spgemm_symbolic[TPL_MKL," + KokkosKernels::ArithTraits<SCALAR>::name() + "]"; \
       Kokkos::Profiling::pushRegion(label);                                                                            \
       spgemm_symbolic_mkl(handle->get_spgemm_handle(), m, n, k, row_mapA, entriesA, row_mapB, entriesB, row_mapC);     \
       Kokkos::Profiling::popRegion();                                                                                  \
     }                                                                                                                  \
   };
 
-#define SPGEMM_SYMBOLIC_DECL_MKL_SE(SCALAR, EXEC) \
-  SPGEMM_SYMBOLIC_DECL_MKL(SCALAR, EXEC, true)    \
-  SPGEMM_SYMBOLIC_DECL_MKL(SCALAR, EXEC, false)
-
-#define SPGEMM_SYMBOLIC_DECL_MKL_E(EXEC)                    \
-  SPGEMM_SYMBOLIC_DECL_MKL_SE(float, EXEC)                  \
-  SPGEMM_SYMBOLIC_DECL_MKL_SE(double, EXEC)                 \
-  SPGEMM_SYMBOLIC_DECL_MKL_SE(Kokkos::complex<float>, EXEC) \
-  SPGEMM_SYMBOLIC_DECL_MKL_SE(Kokkos::complex<double>, EXEC)
+#define SPGEMM_SYMBOLIC_DECL_MKL_E(EXEC)                 \
+  SPGEMM_SYMBOLIC_DECL_MKL(float, EXEC)                  \
+  SPGEMM_SYMBOLIC_DECL_MKL(double, EXEC)                 \
+  SPGEMM_SYMBOLIC_DECL_MKL(Kokkos::complex<float>, EXEC) \
+  SPGEMM_SYMBOLIC_DECL_MKL(Kokkos::complex<double>, EXEC)
 
 #ifdef KOKKOS_ENABLE_SERIAL
 SPGEMM_SYMBOLIC_DECL_MKL_E(Kokkos::Serial)
