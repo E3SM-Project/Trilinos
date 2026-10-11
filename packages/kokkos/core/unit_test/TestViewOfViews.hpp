@@ -1,22 +1,16 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #include <gtest/gtest.h>
 
+#include <Kokkos_Macros.hpp>
+#ifdef KOKKOS_ENABLE_EXPERIMENTAL_CXX20_MODULES
+import kokkos.core;
+#else
 #include <Kokkos_Core.hpp>
+#endif
+
+#include <new>
 
 namespace {
 
@@ -41,6 +35,7 @@ class N {  // not default constructible
 };
 
 template <class V>
+// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class H {  // constructible and destructible only from on the host side
   V v_;
 
@@ -61,11 +56,9 @@ void test_view_of_views_default() {
   vov(0, 0) = a;
   vov(1, 0) = a;
   vov(0, 1) = b;
-#ifndef KOKKOS_ENABLE_IMPL_VIEW_OF_VIEWS_DESTRUCTOR_PRECONDITION_VIOLATION_WORKAROUND
   vov(0, 0) = V();
   vov(1, 0) = V();
   vov(0, 1) = V();
-#endif
 }
 
 template <class V>
@@ -79,13 +72,9 @@ void test_view_of_views_without_initializing() {
   new (&vov(0, 0)) V(a);
   new (&vov(1, 0)) V(a);
   new (&vov(0, 1)) V(b);
-#ifndef KOKKOS_ENABLE_IMPL_VIEW_OF_VIEWS_DESTRUCTOR_PRECONDITION_VIOLATION_WORKAROUND
   vov(0, 0).~V();
   vov(1, 0).~V();
   vov(0, 1).~V();
-#else
-  // leaks memory
-#endif
 }
 
 template <class V>
