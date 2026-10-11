@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOSBLAS_BDF_IMPL_HPP
 #define KOKKOSBLAS_BDF_IMPL_HPP
@@ -168,13 +155,20 @@ KOKKOS_FUNCTION void BDFStep(ode_type& ode, const table_type& table, scalar_type
   }
 
   // solver the nonlinear problem
-  { KokkosODE::Experimental::Newton::Solve(sys, param, jac, temp, y_new, rhs, update, scale); }
+  {
+    int newton_iterations;
+    KokkosODE::Experimental::Newton::Solve(sys, param, jac, temp, y_new, rhs, update, scale, newton_iterations);
+  }
 
 }  // BDFStep
 
 template <class mat_type, class scalar_type>
 KOKKOS_FUNCTION void compute_coeffs(const int order, const scalar_type factor, const mat_type& coeffs) {
+  // initialize coeffs
   coeffs(0, 0) = 1.0;
+  for (int rowIdx = 0; rowIdx < order; ++rowIdx) {
+    coeffs(rowIdx + 1, 0) = 0.0;
+  }
   for (int colIdx = 0; colIdx < order; ++colIdx) {
     coeffs(0, colIdx + 1) = 1.0;
     for (int rowIdx = 0; rowIdx < order; ++rowIdx) {
@@ -205,7 +199,7 @@ template <class ode_type, class mat_type, class vec_type, class res_type, class 
 KOKKOS_FUNCTION void initial_step_size(const ode_type ode, const int order, const scalar_type t0,
                                        const scalar_type atol, const scalar_type rtol, const vec_type& y0,
                                        const res_type& f0, const mat_type& temp, scalar_type& dt_ini) {
-  using KAT = Kokkos::ArithTraits<scalar_type>;
+  using KAT = KokkosKernels::ArithTraits<scalar_type>;
 
   // Extract subviews to store intermediate data
   auto scale = Kokkos::subview(temp, Kokkos::ALL(), 1);
@@ -261,11 +255,11 @@ KOKKOS_FUNCTION void initial_step_size(const ode_type ode, const int order, cons
 }  // initial_step_size
 
 template <class ode_type, class vec_type, class res_type, class mat_type, class scalar_type>
-KOKKOS_FUNCTION void BDFStep(ode_type& ode, scalar_type& t, scalar_type& dt, scalar_type t_end, int& order,
-                             int& num_equal_steps, const int max_newton_iters, const scalar_type atol,
-                             const scalar_type rtol, const scalar_type min_factor, const vec_type& y_old,
-                             const vec_type& y_new, const res_type& rhs, const res_type& update, const mat_type& temp,
-                             const mat_type& temp2) {
+KOKKOS_FUNCTION void BDFStep(ode_type& ode, scalar_type& t, scalar_type& dt, scalar_type t_end,
+                             const scalar_type max_step, int& order, int& num_equal_steps, const int max_newton_iters,
+                             const scalar_type atol, const scalar_type rtol, const scalar_type min_factor,
+                             const vec_type& y_old, const vec_type& y_new, const res_type& rhs, const res_type& update,
+                             const mat_type& temp, const mat_type& temp2) {
   using newton_params = KokkosODE::Experimental::Newton_params;
 
   constexpr int max_order = 5;
@@ -315,13 +309,10 @@ KOKKOS_FUNCTION void BDFStep(ode_type& ode, scalar_type& t, scalar_type& dt, sca
   gamma(5)    = 2.28333333;
 
   BDF_system_wrapper2 sys(ode, psi, update, t, dt);
-  const newton_params param(
-      max_newton_iters, atol,
-      Kokkos::max(10 * Kokkos::ArithTraits<scalar_type>::eps() / rtol, Kokkos::min(0.03, Kokkos::sqrt(rtol))));
+  const newton_params param(max_newton_iters, atol, rtol);
 
-  scalar_type max_step = Kokkos::ArithTraits<scalar_type>::max();
-  scalar_type min_step = Kokkos::ArithTraits<scalar_type>::min();
-  scalar_type safety   = 0.675, error_norm;
+  scalar_type min_step = KokkosKernels::ArithTraits<scalar_type>::min();
+  scalar_type safety = 0.675, error_norm = 0.0;
   if (dt > max_step) {
     update_D(order, max_step / dt, coeffs, tempD, D);
     dt              = max_step;
@@ -372,21 +363,23 @@ KOKKOS_FUNCTION void BDFStep(ode_type& ode, scalar_type& t, scalar_type& dt, sca
     sys.compute_jac = true;
     Kokkos::Experimental::local_deep_copy(y_new, y_predict);
     Kokkos::Experimental::local_deep_copy(update, 0);
+    int newton_iterations;
     KokkosODE::Experimental::newton_solver_status newton_status =
-        KokkosODE::Experimental::Newton::Solve(sys, param, jac, tmp_gesv, y_new, rhs, update, scale);
+        KokkosODE::Experimental::Newton::Solve(sys, param, jac, tmp_gesv, y_new, rhs, update, scale, newton_iterations);
 
     for (int eqIdx = 0; eqIdx < sys.neqs; ++eqIdx) {
       update(eqIdx) = y_new(eqIdx) - y_predict(eqIdx);
     }
 
-    if (newton_status == KokkosODE::Experimental::newton_solver_status::MAX_ITER) {
+    // Reject the step on any status that isn't a converged solve
+    if (newton_status != KokkosODE::Experimental::newton_solver_status::NLS_SUCCESS) {
       dt = 0.5 * dt;
       update_D(order, 0.5, coeffs, tempD, D);
       num_equal_steps = 0;
 
     } else {
       // Estimate the solution error
-      safety     = 0.9 * (2 * max_newton_iters + 1) / (2 * max_newton_iters + param.iters);
+      safety     = 0.9 * (2 * max_newton_iters + 1) / (2 * max_newton_iters + newton_iterations);
       error_norm = 0;
       for (int eqIdx = 0; eqIdx < sys.neqs; ++eqIdx) {
         scale(eqIdx) = atol + rtol * Kokkos::abs(y_new(eqIdx));
@@ -436,7 +429,7 @@ KOKKOS_FUNCTION void BDFStep(ode_type& ode, scalar_type& t, scalar_type& dt, sca
     }
     error_low = Kokkos::sqrt(error_low) / Kokkos::sqrt(sys.neqs);
   } else {
-    error_low = Kokkos::ArithTraits<double>::max();
+    error_low = KokkosKernels::ArithTraits<double>::max();
   }
 
   if (order < max_order) {
@@ -445,7 +438,7 @@ KOKKOS_FUNCTION void BDFStep(ode_type& ode, scalar_type& t, scalar_type& dt, sca
     }
     error_high = Kokkos::sqrt(error_high) / Kokkos::sqrt(sys.neqs);
   } else {
-    error_high = Kokkos::ArithTraits<double>::max();
+    error_high = KokkosKernels::ArithTraits<double>::max();
   }
 
   double factor_low, factor_mid, factor_high, factor;

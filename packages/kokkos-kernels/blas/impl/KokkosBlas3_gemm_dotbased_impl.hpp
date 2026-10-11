@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOSBLAS3_GEMM_DOTBASED_IMPL_HPP_
 #define KOKKOSBLAS3_GEMM_DOTBASED_IMPL_HPP_
@@ -29,7 +16,6 @@ namespace Impl {
 // performed on very long vectors, so, each dot product is distributed among
 // numDivPerDot teams.
 
-struct TagZero {};    // The init tag for beta=0
 struct TagInit {};    // The init tag for beta!=0 and beta !=1
 struct TagMult {};    // The multiplication tag for transposed A
 struct TagMultCT {};  // The multiplication tag for conjugate-transposed A
@@ -43,8 +29,8 @@ struct DotBasedGEMM {
   using size_A   = typename AV::size_type;
   using scalar_C = typename CV::non_const_value_type;
   using size_C   = typename CV::size_type;
-  using AVT      = Kokkos::ArithTraits<scalar_A>;
-  using CVT      = Kokkos::ArithTraits<scalar_C>;
+  using AVT      = KokkosKernels::ArithTraits<scalar_A>;
+  using CVT      = KokkosKernels::ArithTraits<scalar_C>;
 
   const scalar_A alpha;
   const scalar_C beta;
@@ -74,8 +60,7 @@ struct DotBasedGEMM {
 
     // Initialize C matrix if beta != 1
     if (beta == CVT::zero()) {
-      Kokkos::MDRangePolicy<TagZero, ExecSpace, Kokkos::Rank<2>> policyInit(space, {0, 0}, {numCrows, numCcols});
-      Kokkos::parallel_for("Initialize C for Dot Product Based GEMM", policyInit, *this);
+      Kokkos::deep_copy(space, C, CVT::zero());
     } else if (beta != CVT::one()) {
       Kokkos::MDRangePolicy<TagInit, ExecSpace, Kokkos::Rank<2>> policyInit(space, {0, 0}, {numCrows, numCcols});
       Kokkos::parallel_for("Initialize C for Dot Product Based GEMM", policyInit, *this);
@@ -90,9 +75,6 @@ struct DotBasedGEMM {
       Kokkos::parallel_for("Perform Dot Product Based GEMM", policyMult, *this);
     }
   }
-
-  KOKKOS_INLINE_FUNCTION
-  void operator()(const TagZero&, const size_C& rowId, const size_C& colId) const { C(rowId, colId) = CVT::zero(); }
 
   KOKKOS_INLINE_FUNCTION
   void operator()(const TagInit&, const size_C& rowId, const size_C& colId) const {

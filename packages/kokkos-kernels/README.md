@@ -1,12 +1,13 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/kokkos/kokkos-kernels/badge)](https://securityscorecards.dev/viewer/?uri=github.com/kokkos/kokkos-kernels)
-[![Generic badge](https://readthedocs.org/projects/kokkos-kernels/badge/?version=latest)](https://kokkos-kernels.readthedocs.io/en/latest/)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/9534/badge)](https://www.bestpractices.dev/projects/9534)
+[![kokkos-kernels/docs](https://github.com/kokkos/kokkos-kernels/actions/workflows/docs.yml/badge.svg)](https://kokkos.org/kokkos-kernels/docs)
 
 ![KokkosKernels](https://avatars2.githubusercontent.com/u/10199860?s=200&v=4)
 
 # Kokkos Kernels
 
 Kokkos C++ Performance Portability Programming EcoSystem: Math Kernels -
-Provides BLAS, Sparse BLAS and Graph Kernels 
+Provides BLAS, Sparse BLAS and Graph Kernels
 
 KokkosKernels implements local computational kernels for linear
 algebra and graph operations, using the Kokkos shared-memory parallel
@@ -31,22 +32,21 @@ Computational kernels in this subpackage include the following:
 
 We organize this directory as follows:
 
-1. Public interfaces to computational kernels live in the src/
-     subdirectory (kokkos-kernels/src):
+1. Public interfaces to computational kernels live in each component
+     `src/` subdirectories (e.g., `blas/src/`, `sparse/src/`):
 
-*    Kokkos_Blas1_MV.hpp: (Multi)vector operations that
-       Tpetra::MultiVector uses
-*    Kokkos_Sparse_CrsMatrix.hpp: Declaration and definition of
+*    KokkosSparse_CrsMatrix.hpp: Declaration and definition of
        KokkosSparse::CrsMatrix, the sparse matrix data structure used
        for the computational kernels below
 *    KokkosSparse_spmv.hpp: Sparse matrix-vector multiply with a
        single vector, stored in a 1-D View + Sparse matrix-vector multiply with
        multiple vectors at a time (multivectors), stored in a 2-D View
 
-2. Implementations of computational kernels live in the src/impl/
-     subdirectory (kokkos-kernels/src/impl)
+2. Implementations of computational kernels live in each component
+     `impl/` subdirectories (e.g., `blas/impl/`, `sparse/impl/`)
 
-3. Correctness tests live in the unit_test/ subdirectory, and
+3. Correctness tests live in each component `unit_test/` subdirectories
+     (e.g., `blas/unit_test/`, `sparse/unit_test/`), and
      performance tests live in the perf_test/ subdirectory
 
 4. Simple example scripts to build Kokkoskernels are in
@@ -77,15 +77,15 @@ KokkosKernels_ENABLE_OPTION
 with options capitalized at the end. Almost all Kokkos Kernels options determine
 whether ETI is used with a particular datatype, e.g.
 ````
--DKokkosKernels_INST_DOUBLE=On 
+-DKokkosKernels_INST_DOUBLE=On
 ````
-which does explicit instantation of all kernels for double type.
+which does explicit instantiation of all kernels for double type.
 Kokkos Kernels derives most of its CXXFLAGS, C++ standard, architecture flags,
 and other options from an installed (or in-tree) Kokkos package.
 Tuning for a particular device or architecture is generally done through *Kokkos*
 while tuning which kernels get instantiated is done through *Kokkos Kernels*.
 
-Kokkos Kernels does supply flags for *asserting* properies of the linked Kokkos,
+Kokkos Kernels does supply flags for *asserting* properties of the linked Kokkos,
 for example:
 ````
 -DKokkosKernels_REQUIRE_DEVICES=CUDA
@@ -108,14 +108,14 @@ A basic installation would be done as:
 ````
 spack install kokkos-kernels
 ````
-Spack allows options and and compilers to be tuned in the install command.
+Spack allows options and compilers to be tuned in the install command.
 ````
 spack install kokkos-kernels@3.0 +double %gcc@7.3.0 +openmp
 ````
 This example illustrates the three most common parameters to Spack:
 * Variants: specified with, e.g. `+openmp`, this activates (or deactivates with, e.g. `~openmp`) certain options.
 * Version:  immediately following `kokkos-kernels` the `@version` can specify a particular Kokkos Kernels to build
-* Compiler: a default compiler will be chosen if not specified, but an exact compiler version can be given with the `%`option.
+* Compiler: a default compiler will be chosen if not specified, but an exact compiler version can be given with the `%` option.
 
 For a complete list of Kokkos Kernels options, run:
 ````
@@ -126,16 +126,16 @@ spack info kokkos-kernels
 As discussed above in the CMake section, Kokkos Kernels inherits much of its configuration from the installed Kokkos.
 Spack gives a mechanism for directly specifying Kokkos dependency options:
 ````
-spack install kokkos-kernels ^kokkos@3.0+cuda+cuda_uvm
+spack install kokkos-kernels ^kokkos@5.0+cuda
 ````
-The carat `^` sepcifies an exact dependency configuration, which in this case activates CUDA and CUDA_UVM.
+The carat `^` specifies an exact dependency configuration, which in this case activates CUDA
 For a complete list of tunable Kokkos options, run
 ````
 spack info kokkos
 ````
 
 #### Setting up a development environment with Spack
-Spack is generally most useful for installng packages to use.
+Spack is generally most useful for installing packages to use.
 If you want to install all *dependencies* of Kokkos Kernels first so that you can actively develop a given Kokkos Kernels source this can still be done. Go to the Kokkos Kernels source code folder and run:
 ````
 spack diy -u cmake kokkos-kernels@{version} ...
@@ -156,27 +156,28 @@ CMAKE_CXX_USE_RESPONSE_FILE_FOR_OBJECTS:BOOL=ON when building with CUDA and
 complex double enabled."
 
 
-## Using Kokkoskernels Test Drivers 
+## Using Kokkoskernels Test Drivers
 
 In `perf_test` there are test drivers.
 
-* `KokkosGraph_triangle.exe` : Triangle counting driver. 
-* `KokkosSparse_spgemm.exe` : Sparse Matrix Sparse Matrix Multiply: 
+* `KokkosGraph_triangle.exe` : Triangle counting driver.
+* `KokkosSparse_spgemm.exe` : Sparse Matrix Sparse Matrix Multiply:
 * *****NOTE: KKMEM is outdated. Use default algorithm: KKSPGEMM = KKDEFAULT = DEFAULT****
 * Or within the code:
 *     kh.create_spgemm_handle(KokkosSparse::SPGEMM_KK);
 * `KokkosSparse_spmv.exe` : Sparse matvec.
 * `KokkosSparse_pcg.exe`  : CG method with Gauss Seidel as preconditioner.
-* `KokkosGraph_color.exe` : Distance-1 Graph coloring 
+* `KokkosGraph_color.exe` : Distance-1 Graph coloring
 * `KokkosKernels_MatrixConverter.exe` : given a matrix market format, converts it ".bin"
    binary format for fast input output readings, which can be read by other test drivers.
-   
+
 Please report bugs or performance issues to: https://github.com/kokkos/kokkos-kernels/issues
 
-##### [LICENSE](https://github.com/kokkos/kokkos-kernels/blob/devel/LICENSE)
-[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+##### [LICENSE](https://github.com/kokkos/kokkos-kernels/blob/develop/LICENSE)
+[![License](https://img.shields.io/badge/License-Apache--2.0_WITH_LLVM--exception-blue)](https://spdx.org/licenses/LLVM-exception.html)
 
-KokkosKernels is licensed under standard 3-clause BSD terms of use.  For
-specifics, please refer to the LICENSE file contained in the
-repository or distribution.  Under the terms of Contract DE-NA0003525 with NTESS,
+Under the terms of Contract DE-NA0003525 with NTESS,
 the U.S. Government retains certain rights in this software.
+
+The full license statement used in all headers is available [here](https://kokkos.org/kokkos-core-wiki/license.html) or
+[here](https://github.com/kokkos/kokkos-kernels/blob/develop/LICENSE).

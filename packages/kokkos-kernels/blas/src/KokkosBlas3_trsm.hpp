@@ -1,24 +1,10 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #ifndef KOKKOSBLAS3_TRSM_HPP_
 #define KOKKOSBLAS3_TRSM_HPP_
 
 /// \file KokkosBlas3_trsm.hpp
 
-#include "KokkosKernels_Macros.hpp"
 #include "KokkosBlas3_trsm_spec.hpp"
 #include "KokkosKernels_helpers.hpp"
 #include "KokkosKernels_Error.hpp"
@@ -126,12 +112,15 @@ void trsm(const execution_space& space, const char side[], const char uplo[], co
   // Minimize the number of Impl::TRSM instantiations, by
   // standardizing on particular View specializations for its template
   // parameters.
-  using AVT = Kokkos::View<typename AViewType::const_value_type**, typename AViewType::array_layout,
-                           typename AViewType::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
+  using AVT = Kokkos::View<typename AViewType::const_value_type**, typename AViewType::array_layout, execution_space,
+                           Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
   using BVT = Kokkos::View<typename BViewType::non_const_value_type**, typename BViewType::array_layout,
-                           typename BViewType::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
+                           execution_space, Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
 
-  KokkosBlas::Impl::TRSM<execution_space, AVT, BVT>::trsm(space, side, uplo, trans, diag, alpha, A, B);
+  AVT A_internal = KokkosKernels::Impl::unificationCast<AVT>(A);
+  BVT B_internal = KokkosKernels::Impl::unificationCast<BVT>(B);
+  KokkosBlas::Impl::TRSM<execution_space, AVT, BVT>::trsm(space, side, uplo, trans, diag, alpha, A_internal,
+                                                          B_internal);
 }
 
 /// \brief Solve triangular linear system with multiple RHSs:

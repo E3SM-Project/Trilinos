@@ -1,24 +1,11 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #ifndef KOKKOSBLAS1_IMPL_RECIPROCAL_SPEC_HPP_
 #define KOKKOSBLAS1_IMPL_RECIPROCAL_SPEC_HPP_
 
 #include <KokkosKernels_config.h>
 #include <Kokkos_Core.hpp>
-#include <Kokkos_ArithTraits.hpp>
+#include <KokkosKernels_ArithTraits.hpp>
 
 // Include the actual functors
 #if !defined(KOKKOSKERNELS_ETI_ONLY) || KOKKOSKERNELS_IMPL_COMPILE_LIBRARY
@@ -42,15 +29,12 @@ struct reciprocal_eti_spec_avail {
 // We may spread out definitions (see _INST macro below) across one or
 // more .cpp files.
 //
-#define KOKKOSBLAS1_RECIPROCAL_ETI_SPEC_AVAIL(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                                  \
-  template <>                                                                                                         \
-  struct reciprocal_eti_spec_avail<                                                                                   \
-      EXEC_SPACE,                                                                                                     \
-      Kokkos::View<SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                         \
-      1> {                                                                                                            \
-    enum : bool { value = true };                                                                                     \
+#define KOKKOSBLAS1_RECIPROCAL_ETI_SPEC_AVAIL(SCALAR, LAYOUT, EXEC_SPACE)                              \
+  template <>                                                                                          \
+  struct reciprocal_eti_spec_avail<                                                                    \
+      EXEC_SPACE, Kokkos::View<SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, 1> {  \
+    enum : bool { value = true };                                                                      \
   };
 
 //
@@ -60,15 +44,12 @@ struct reciprocal_eti_spec_avail {
 // We may spread out definitions (see _DEF macro below) across one or
 // more .cpp files.
 //
-#define KOKKOSBLAS1_RECIPROCAL_MV_ETI_SPEC_AVAIL(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                                \
-  template <>                                                                                                          \
-  struct reciprocal_eti_spec_avail<                                                                                    \
-      EXEC_SPACE,                                                                                                      \
-      Kokkos::View<SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                          \
-      2> {                                                                                                             \
-    enum : bool { value = true };                                                                                      \
+#define KOKKOSBLAS1_RECIPROCAL_MV_ETI_SPEC_AVAIL(SCALAR, LAYOUT, EXEC_SPACE)                            \
+  template <>                                                                                           \
+  struct reciprocal_eti_spec_avail<                                                                     \
+      EXEC_SPACE, Kokkos::View<SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, 2> {  \
+    enum : bool { value = true };                                                                       \
   };
 
 // Include the actual specialization declarations
@@ -180,26 +161,20 @@ struct Reciprocal<execution_space, RMV, XMV, 2, false, KOKKOSKERNELS_IMPL_COMPIL
 // We may spread out definitions (see _DEF macro below) across one or
 // more .cpp files.
 //
-#define KOKKOSBLAS1_RECIPROCAL_ETI_SPEC_DECL(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                                   \
-  extern template struct Reciprocal<                                                                                  \
-      EXEC_SPACE,                                                                                                     \
-      Kokkos::View<SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                         \
-      1, false, true>;
+#define KOKKOSBLAS1_RECIPROCAL_ETI_SPEC_DECL(SCALAR, LAYOUT, EXEC_SPACE)                               \
+  extern template struct Reciprocal<                                                                   \
+      EXEC_SPACE, Kokkos::View<SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, 1, false, true>;
 
 //
 // Macro for definition of full specialization of
 // KokkosBlas::Impl::Reciprocal for rank == 2.  This is NOT for users!!!  We
 // use this macro in one or more .cpp files in this directory.
 //
-#define KOKKOSBLAS1_RECIPROCAL_ETI_SPEC_INST(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                                   \
-  template struct Reciprocal<                                                                                         \
-      EXEC_SPACE,                                                                                                     \
-      Kokkos::View<SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
-      Kokkos::View<const SCALAR*, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                         \
-      1, false, true>;
+#define KOKKOSBLAS1_RECIPROCAL_ETI_SPEC_INST(SCALAR, LAYOUT, EXEC_SPACE)                               \
+  template struct Reciprocal<                                                                          \
+      EXEC_SPACE, Kokkos::View<SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
+      Kokkos::View<const SCALAR*, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, 1, false, true>;
 
 //
 // Macro for declaration of full specialization of
@@ -208,26 +183,20 @@ struct Reciprocal<execution_space, RMV, XMV, 2, false, KOKKOSKERNELS_IMPL_COMPIL
 // We may spread out definitions (see _DEF macro below) across one or
 // more .cpp files.
 //
-#define KOKKOSBLAS1_RECIPROCAL_MV_ETI_SPEC_DECL(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                                 \
-  extern template struct Reciprocal<                                                                                   \
-      EXEC_SPACE,                                                                                                      \
-      Kokkos::View<SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                          \
-      2, false, true>;
+#define KOKKOSBLAS1_RECIPROCAL_MV_ETI_SPEC_DECL(SCALAR, LAYOUT, EXEC_SPACE)                             \
+  extern template struct Reciprocal<                                                                    \
+      EXEC_SPACE, Kokkos::View<SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, 2, false, true>;
 
 //
 // Macro for definition of full specialization of
 // KokkosBlas::Impl::Reciprocal for rank == 2.  This is NOT for users!!!  We
 // use this macro in one or more .cpp files in this directory.
 //
-#define KOKKOSBLAS1_RECIPROCAL_MV_ETI_SPEC_INST(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE)                                 \
-  template struct Reciprocal<                                                                                          \
-      EXEC_SPACE,                                                                                                      \
-      Kokkos::View<SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
-      Kokkos::View<const SCALAR**, LAYOUT, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,                                      \
-                   Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                                                          \
-      2, false, true>;
+#define KOKKOSBLAS1_RECIPROCAL_MV_ETI_SPEC_INST(SCALAR, LAYOUT, EXEC_SPACE)                             \
+  template struct Reciprocal<                                                                           \
+      EXEC_SPACE, Kokkos::View<SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
+      Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, 2, false, true>;
 
 #include <KokkosBlas1_reciprocal_tpl_spec_decl.hpp>
 #include <generated_specializations_hpp/KokkosBlas1_reciprocal_eti_spec_decl.hpp>

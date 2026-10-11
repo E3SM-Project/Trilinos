@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KK_TESTPARAMS_H
 #define KK_TESTPARAMS_H
@@ -46,7 +33,6 @@ struct Parameters {
   int use_cuda;
   int use_hip;
   int use_sycl;
-  int use_openmptarget;
   int use_serial;
   int a_mem_space, b_mem_space, c_mem_space, work_mem_space;
 
@@ -92,7 +78,6 @@ struct Parameters {
     use_cuda                  = 0;
     use_hip                   = 0;
     use_sycl                  = 0;
-    use_openmptarget          = 0;
     use_serial                = 0;
     a_mem_space = b_mem_space = c_mem_space = work_mem_space = 1;
     a_mtx_bin_file = b_mtx_bin_file = c_mtx_bin_file = "";

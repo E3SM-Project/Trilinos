@@ -1,21 +1,8 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
-#ifndef _KOKKOSGRAPH_DISTANCE2COLOR_IMPL_HPP
-#define _KOKKOSGRAPH_DISTANCE2COLOR_IMPL_HPP
+#ifndef KOKKOSGRAPH_DISTANCE2COLOR_IMPL_HPP
+#define KOKKOSGRAPH_DISTANCE2COLOR_IMPL_HPP
 
 #include <iomanip>
 #include <stdexcept>
@@ -930,12 +917,12 @@ class GraphColorDistance2 {
   void resolveConflictsSerial(rowmap_t xadj_, entries_t adj_, rowmap_t t_xadj_, entries_t t_adj_,
                               color_view_type vertex_colors_, lno_view_t current_vertexList_,
                               size_type current_vertexListLength_) {
-    color_type* forbidden = new color_type[nr];
-    for (lno_t i = 0; i < nr; i++) forbidden[i] = nr;
+    color_type* forbidden = new color_type[nr + 1];
+    for (lno_t i = 0; i <= nr; i++) forbidden[i] = nr;
     lno_t vid = 0;
     lno_t end = nr;
 
-    typename lno_view_t::HostMirror h_recolor_list;
+    typename lno_view_t::host_mirror_type h_recolor_list;
 
     end            = current_vertexListLength_;
     h_recolor_list = Kokkos::create_mirror_view(current_vertexList_);
@@ -1200,18 +1187,10 @@ class GraphColorDistance2 {
                 if (vid_d1 != vid) {
                   const color_type color        = _colors(vid_d1);
                   const color_type color_offset = color - offset;
-                  if (color && color_offset <= VBBIT_D2_COLORING_FORBIDDEN_SIZE) {
-                    // if it is in the current range, then add the color to the
-                    // banned colors
-                    if (color > offset) {
-                      // convert color to bit representation
-                      bit_64_forbidden_type ban_color_bit = 1;
-
-                      ban_color_bit = ban_color_bit << color_offset;
-
-                      // add it to forbidden colors
-                      forbidden |= (bit_64_forbidden_type(1) << color_offset);
-                    }
+                  if (color >= offset && color_offset < VBBIT_D2_COLORING_FORBIDDEN_SIZE) {
+                    // convert color to bit representation and add it to
+                    // forbidden colors
+                    forbidden |= (bit_64_forbidden_type(1) << color_offset);
                   }
                 }
               }
@@ -1550,4 +1529,4 @@ void graph_print_distance2_color_histogram(KernelHandle* handle, bool csv = fals
 }  // namespace Impl
 }  // namespace KokkosGraph
 
-#endif  // _KOKKOSGRAPH_DISTANCE2COLOR_IMPL_HPP
+#endif  // KOKKOSGRAPH_DISTANCE2COLOR_IMPL_HPP
