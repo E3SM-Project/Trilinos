@@ -1,25 +1,13 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #include <Kokkos_Core.hpp>
 #include <iostream>
 #include <string>
+#include <cstdint>
 
-#ifndef _PAR_ILUTHANDLE_HPP
-#define _PAR_ILUTHANDLE_HPP
+#ifndef KOKKOSSPARSE_PAR_ILUTHANDLE_HPP
+#define KOKKOSSPARSE_PAR_ILUTHANDLE_HPP
 
 namespace KokkosSparse {
 namespace Experimental {
@@ -52,18 +40,20 @@ class PAR_ILUTHandle {
   using nnz_scalar_t       = typename std::remove_const<scalar_t_>::type;
   using const_nnz_scalar_t = const nnz_scalar_t;
 
-  using float_t = typename Kokkos::ArithTraits<nnz_scalar_t>::mag_type;
+  using float_t = typename KokkosKernels::ArithTraits<nnz_scalar_t>::mag_type;
 
-  using nnz_row_view_t = typename Kokkos::View<size_type *, HandlePersistentMemorySpace>;
+  using nnz_row_view_t = typename Kokkos::View<size_type*, HandlePersistentMemorySpace>;
 
-  using nnz_lno_view_t = typename Kokkos::View<nnz_lno_t *, HandlePersistentMemorySpace>;
+  using nnz_lno_view_t = typename Kokkos::View<nnz_lno_t*, HandlePersistentMemorySpace>;
 
-  using nnz_value_view_t = typename Kokkos::View<nnz_scalar_t *, HandlePersistentMemorySpace>;
+  using nnz_value_view_t = typename Kokkos::View<nnz_scalar_t*, HandlePersistentMemorySpace>;
+
+  using nnz_float_view_t = typename Kokkos::View<float_t*, HandlePersistentMemorySpace>;
 
   using signed_integral_t = typename std::make_signed<typename nnz_row_view_t::non_const_value_type>::type;
 
   using signed_nnz_lno_view_t =
-      Kokkos::View<signed_integral_t *, typename nnz_row_view_t::array_layout, typename nnz_row_view_t::device_type,
+      Kokkos::View<signed_integral_t*, typename nnz_row_view_t::array_layout, typename nnz_row_view_t::device_type,
                    typename nnz_row_view_t::memory_traits>;
 
  private:
@@ -72,18 +62,31 @@ class PAR_ILUTHandle {
   float_t residual_norm_delta_stop;  /// When the change in residual from
                                      /// iteration to iteration drops below
                                      /// this, the algorithm will stop (even if
-                                     /// max_iters has not been hit)
+                                     /// max_iters has not been hit). If this is set to
+                                     /// zero, computing residual step will be skipped which
+                                     /// can reduce overall memory use and speed up the individual
+                                     /// iterations (it will always do max_iter iterations though).
   float_t fill_in_limit;             /// The threshold for removing candidates
                                      /// from the intermediate L and U is set such
                                      /// that the resulting sparsity pattern has
                                      /// at most `fill_in_limit` times the number
                                      /// of non-zeros of the ILU(0)
                                      /// factorization. This selection is executed
-                                     /// separately for both factors L and U.
+                                     /// separately for both factors L and U. A higher fill limit
+                                     /// (2 or 3) may be necessary for very sparse matrices to achieve a
+                                     /// good preconditioner but this will increase the resources needed
+                                     /// by par_ilut.
   bool async_update;                 /// Whether compute LU factors should do asychronous
                                      /// updates. When ON, the algorithm will usually converge
                                      /// faster but it makes the algorithm non-deterministic.
   bool verbose;                      /// Print information while executing par_ilut
+
+  bool reuse_numeric_pattern;  /// Whether repeated numeric calls with the same matrix
+                               /// sparsity structure may reuse the previously computed
+                               /// factor sparsity pattern. This can reduce setup cost
+                               /// for matrices with unchanged graph and changing values,
+                               /// but may change results relative to a fresh adaptive
+                               /// par_ilut numeric phase. Off by default.
 
   // Stored by parent KokkosKernelsHandle
   int team_size;    /// Kokkos team size. Set by the parent handle. -1 implies
@@ -103,6 +106,18 @@ class PAR_ILUTHandle {
   nnz_scalar_t end_rel_res;  /// The A - LU residual norm at the time the
                              /// algorithm finished
 
+  // Internal cached pattern state for repeated numeric calls with same structure.
+  bool cached_pattern_valid;
+  uint32_t cached_rowmap_hash;
+  uint32_t cached_entries_hash;
+  nnz_row_view_t cached_L_row_map;
+  nnz_lno_view_t cached_L_entries;
+  nnz_row_view_t cached_U_row_map;
+  nnz_lno_view_t cached_U_entries;
+  nnz_row_view_t cached_Ut_row_map;
+  nnz_lno_view_t cached_Ut_entries;
+  nnz_row_view_t cached_U_to_Ut_perm;
+
  public:
   // See KokkosKernelsHandle::create_par_ilut_handle for default user input
   // values
@@ -113,6 +128,7 @@ class PAR_ILUTHandle {
         fill_in_limit(fill_in_limit_),
         async_update(async_update_),
         verbose(verbose_),
+        reuse_numeric_pattern(false),
         team_size(-1),
         vector_size(-1),
         nrows(0),
@@ -120,7 +136,17 @@ class PAR_ILUTHandle {
         nnzU(0),
         symbolic_complete(false),
         num_iters(-1),
-        end_rel_res(-1) {}
+        end_rel_res(-1),
+        cached_pattern_valid(false),
+        cached_rowmap_hash(0),
+        cached_entries_hash(0),
+        cached_L_row_map(),
+        cached_L_entries(),
+        cached_U_row_map(),
+        cached_U_entries(),
+        cached_Ut_row_map(),
+        cached_Ut_entries(),
+        cached_U_to_Ut_perm() {}
 
   KOKKOS_INLINE_FUNCTION
   ~PAR_ILUTHandle() {}
@@ -154,15 +180,22 @@ class PAR_ILUTHandle {
   void set_vector_size(const int vs) { this->vector_size = vs; }
   int get_vector_size() const { return this->vector_size; }
 
-  void set_max_iter(const size_type max_iter_) { this->max_iter = max_iter_; }
+  void set_max_iter(const size_type max_iter_) {
+    this->max_iter = max_iter_;
+    clear_cached_pattern();
+  }
   int get_max_iter() const { return this->max_iter; }
 
   void set_residual_norm_delta_stop(const float_t residual_norm_delta_stop_) {
     this->residual_norm_delta_stop = residual_norm_delta_stop_;
+    clear_cached_pattern();
   }
   float_t get_residual_norm_delta_stop() const { return this->residual_norm_delta_stop; }
 
-  void set_fill_in_limit(const float_t fill_in_limit_) { this->fill_in_limit = fill_in_limit_; }
+  void set_fill_in_limit(const float_t fill_in_limit_) {
+    this->fill_in_limit = fill_in_limit_;
+    clear_cached_pattern();
+  }
   float_t get_fill_in_limit() const { return this->fill_in_limit; }
 
   bool get_verbose() const { return verbose; }
@@ -171,7 +204,10 @@ class PAR_ILUTHandle {
 
   bool get_async_update() const { return async_update; }
 
-  void set_async_update(const bool async_update_) { this->async_update = async_update_; }
+  void set_async_update(const bool async_update_) {
+    this->async_update = async_update_;
+    clear_cached_pattern();
+  }
 
   TeamPolicy get_default_team_policy() const {
     if (team_size == -1) {
@@ -189,6 +225,62 @@ class PAR_ILUTHandle {
     num_iters   = num_iters_;
     end_rel_res = end_rel_res_;
   }
+
+  bool get_reuse_numeric_pattern() const { return reuse_numeric_pattern; }
+  void set_reuse_numeric_pattern(const bool reuse_numeric_pattern_) {
+    this->reuse_numeric_pattern = reuse_numeric_pattern_;
+    clear_cached_pattern();
+  }
+
+  // Internal cache helpers
+  bool has_cached_pattern() const { return cached_pattern_valid; }
+
+  void clear_cached_pattern() {
+    cached_pattern_valid = false;
+    cached_rowmap_hash   = 0;
+    cached_entries_hash  = 0;
+    cached_L_row_map     = nnz_row_view_t();
+    cached_L_entries     = nnz_lno_view_t();
+    cached_U_row_map     = nnz_row_view_t();
+    cached_U_entries     = nnz_lno_view_t();
+    cached_Ut_row_map    = nnz_row_view_t();
+    cached_Ut_entries    = nnz_lno_view_t();
+    cached_U_to_Ut_perm  = nnz_row_view_t();
+  }
+
+  bool cached_pattern_matches_structure_hash(uint32_t rowmap_hash, uint32_t entries_hash) const {
+    return cached_pattern_valid && cached_rowmap_hash == rowmap_hash && cached_entries_hash == entries_hash &&
+           size_type(cached_L_row_map.extent(0)) == nrows + 1 && size_type(cached_U_row_map.extent(0)) == nrows + 1 &&
+           size_type(cached_Ut_row_map.extent(0)) == nrows + 1 &&
+           cached_Ut_entries.extent(0) == cached_U_entries.extent(0) &&
+           cached_U_to_Ut_perm.extent(0) == cached_U_entries.extent(0);
+  }
+
+  void set_cached_structure_hash(uint32_t rowmap_hash, uint32_t entries_hash) {
+    cached_rowmap_hash  = rowmap_hash;
+    cached_entries_hash = entries_hash;
+  }
+
+  uint32_t get_cached_rowmap_hash() const { return cached_rowmap_hash; }
+  uint32_t get_cached_entries_hash() const { return cached_entries_hash; }
+
+  nnz_row_view_t& get_cached_L_row_map() { return cached_L_row_map; }
+  nnz_lno_view_t& get_cached_L_entries() { return cached_L_entries; }
+  nnz_row_view_t& get_cached_U_row_map() { return cached_U_row_map; }
+  nnz_lno_view_t& get_cached_U_entries() { return cached_U_entries; }
+  nnz_row_view_t& get_cached_Ut_row_map() { return cached_Ut_row_map; }
+  nnz_lno_view_t& get_cached_Ut_entries() { return cached_Ut_entries; }
+  nnz_row_view_t& get_cached_U_to_Ut_perm() { return cached_U_to_Ut_perm; }
+
+  const nnz_row_view_t& get_cached_L_row_map() const { return cached_L_row_map; }
+  const nnz_lno_view_t& get_cached_L_entries() const { return cached_L_entries; }
+  const nnz_row_view_t& get_cached_U_row_map() const { return cached_U_row_map; }
+  const nnz_lno_view_t& get_cached_U_entries() const { return cached_U_entries; }
+  const nnz_row_view_t& get_cached_Ut_row_map() const { return cached_Ut_row_map; }
+  const nnz_lno_view_t& get_cached_Ut_entries() const { return cached_Ut_entries; }
+  const nnz_row_view_t& get_cached_U_to_Ut_perm() const { return cached_U_to_Ut_perm; }
+
+  void mark_cached_pattern_valid() { cached_pattern_valid = true; }
 };
 
 }  // namespace Experimental

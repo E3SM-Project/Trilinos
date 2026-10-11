@@ -1,26 +1,13 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #include <fstream>
 #include <ostream>
 
 #include <Kokkos_Core.hpp>
 #include <KokkosKernels_Utils.hpp>
 
-#ifndef _GRAPHCOLORHANDLE_HPP
-#define _GRAPHCOLORHANDLE_HPP
+#ifndef KOKKOSGRAPH_DISTANCE1COLORHANDLE_HPP
+#define KOKKOSGRAPH_DISTANCE1COLORHANDLE_HPP
 
 // #define VERBOSE
 namespace KokkosGraph {
@@ -66,18 +53,19 @@ class GraphColoringHandle {
   typedef typename color_view_t::array_layout color_view_array_layout;
   typedef typename color_view_t::device_type color_view_device_t;
   typedef typename color_view_t::memory_traits color_view_memory_traits;
-  typedef typename color_view_t::HostMirror color_host_view_t;  // Host view
-                                                                // type
+  typedef typename color_view_t::host_mirror_type color_host_view_t;  // Host view
+                                                                      // type
 
   typedef typename Kokkos::View<size_type *, HandleTempMemorySpace> size_type_temp_work_view_t;
   typedef typename Kokkos::View<size_type *, HandlePersistentMemorySpace> size_type_persistent_work_view_t;
 
-  typedef
-      typename size_type_persistent_work_view_t::HostMirror size_type_persistent_work_host_view_t;  // Host view type
+  typedef typename size_type_persistent_work_view_t::host_mirror_type
+      size_type_persistent_work_host_view_t;  // Host view type
 
   typedef typename Kokkos::View<nnz_lno_t *, HandleTempMemorySpace> nnz_lno_temp_work_view_t;
   typedef typename Kokkos::View<nnz_lno_t *, HandlePersistentMemorySpace> nnz_lno_persistent_work_view_t;
-  typedef typename nnz_lno_persistent_work_view_t::HostMirror nnz_lno_persistent_work_host_view_t;  // Host view type
+  typedef
+      typename nnz_lno_persistent_work_view_t::host_mirror_type nnz_lno_persistent_work_host_view_t;  // Host view type
 
   typedef Kokkos::TeamPolicy<ExecutionSpace> team_policy_t;
   typedef typename team_policy_t::member_type team_member_t;
@@ -418,8 +406,7 @@ class GraphColoringHandle {
                              clt  //, new_num_edge
         );
 
-        KokkosKernels::Impl::inclusive_parallel_prefix_sum<size_type_temp_work_view_t, ExecutionSpace>(nv + 1,
-                                                                                                       lower_count);
+        KokkosKernels::inclusive_parallel_prefix_sum(ExecutionSpace(), lower_count);
         // Kokkos::parallel_scan (my_exec_space(0, nv + 1),
         // PPS<row_lno_temp_work_view_t>(lower_count));
         ExecutionSpace().fence();
@@ -453,8 +440,7 @@ class GraphColoringHandle {
         // Kokkos::parallel_scan (my_exec_space(0, nv + 1),
         // PPS<row_lno_temp_work_view_t>(lower_count));
 
-        KokkosKernels::Impl::inclusive_parallel_prefix_sum<size_type_temp_work_view_t, ExecutionSpace>(nv + 1,
-                                                                                                       lower_count);
+        KokkosKernels::inclusive_parallel_prefix_sum(ExecutionSpace(), lower_count);
         nnz_lno_persistent_work_view_t half_src(Kokkos::view_alloc(Kokkos::WithoutInitializing, "HALF SRC"),
                                                 new_num_edge);
         nnz_lno_persistent_work_view_t half_dst(Kokkos::view_alloc(Kokkos::WithoutInitializing, "HALF DST"),
@@ -539,7 +525,7 @@ class GraphColoringHandle {
     }
   }
 
-  virtual ~GraphColoringHandle(){};
+  virtual ~GraphColoringHandle() {}
 
   // getters
   ColoringAlgorithm get_coloring_algo_type() const { return this->coloring_algorithm_type; }
@@ -615,4 +601,4 @@ class GraphColoringHandle {
 
 }  // namespace KokkosGraph
 
-#endif  // _GRAPHCOLORHANDLE_HPP
+#endif  // KOKKOSGRAPH_DISTANCE1COLORHANDLE_HPP

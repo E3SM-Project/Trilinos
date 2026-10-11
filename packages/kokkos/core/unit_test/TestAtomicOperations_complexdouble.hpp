@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #include <TestAtomicOperations.hpp>
 
@@ -38,9 +25,14 @@ TEST(TEST_CATEGORY, atomic_operations_complexdouble) {
     ASSERT_TRUE(
         (atomic_op_test<MulAtomicTest, T, TEST_EXECSPACE>(old_val, update)));
 
-    // FIXME_32BIT disable division test for 32bit where we have accuracy issues
-    // with division atomics still compile it though
-    if (sizeof(void*) == 8) {
+    if (sizeof(void*) == 4) {
+      // 32-bit x86 may do reference division in 80-bit x87, so allow up to
+      // one ULP.
+      ASSERT_TRUE((update != 0
+                       ? atomic_op_test<DivAtomicTest, T, TEST_EXECSPACE, true>(
+                             old_val, update)
+                       : true));
+    } else {
       ASSERT_TRUE((update != 0
                        ? atomic_op_test<DivAtomicTest, T, TEST_EXECSPACE>(
                              old_val, update)

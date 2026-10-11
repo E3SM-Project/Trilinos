@@ -1,22 +1,15 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
+#include <Kokkos_Macros.hpp>
+#ifdef KOKKOS_ENABLE_EXPERIMENTAL_CXX20_MODULES
+import kokkos.core;
+#else
 #include <Kokkos_Core.hpp>
+#endif
 
 #include <Kokkos_Timer.hpp>
+#include <Kokkos_TypeInfo.hpp>
 #include <iostream>
 #include <cstdlib>
 #include <cstdint>
@@ -645,6 +638,9 @@ struct functor_vec_scan_ret_val {
         },
         return_val);
 
+    // Suppressing diagnostic and not casting since that test is being
+    // instantantiated with user-defined types such as array_reduce
+    // NOLINTNEXTLINE(bugprone-integer-division)
     Scalar sum_ref = ((upper_bound - 1) * (upper_bound)) / 2;
 
     if (flag() == 0 && return_val != sum_ref) {
@@ -679,8 +675,8 @@ struct functor_reduce {
 template <typename Scalar, class ExecutionSpace>
 bool test_scalar(int nteams, int team_size, int test) {
   Kokkos::View<int, Kokkos::LayoutLeft, ExecutionSpace> d_flag("flag");
-  typename Kokkos::View<int, Kokkos::LayoutLeft, ExecutionSpace>::HostMirror
-      h_flag("h_flag");
+  typename Kokkos::View<int, Kokkos::LayoutLeft,
+                        ExecutionSpace>::host_mirror_type h_flag("h_flag");
   h_flag() = 0;
   Kokkos::deep_copy(d_flag, h_flag);
 
@@ -694,9 +690,11 @@ bool test_scalar(int nteams, int team_size, int test) {
         Kokkos::TeamPolicy<ExecutionSpace>(nteams, team_size, 8),
         functor_vec_red_reducer<Scalar, ExecutionSpace>(d_flag));
   } else if (test == 2) {
+#if !defined(KOKKOS_ENABLE_OPENACC)
     Kokkos::parallel_for(
         Kokkos::TeamPolicy<ExecutionSpace>(nteams, team_size, 8),
         functor_vec_scan<Scalar, ExecutionSpace>(d_flag));
+#endif
   } else if (test == 3) {
     Kokkos::parallel_for(
         Kokkos::TeamPolicy<ExecutionSpace>(nteams, team_size, 8),
@@ -756,8 +754,14 @@ bool Test(int test) {
 #else
   int team_size = 33;
 #endif
-  int const concurrency = ExecutionSpace().concurrency();
-  if (team_size > concurrency) team_size = concurrency;
+  // Can't use concurrency here since some backends have a maximum team size
+  // that is smaller (and smaller than 33).
+  int const team_size_max =
+      Kokkos::TeamPolicy<ExecutionSpace>(1, 1).team_size_max(
+          KOKKOS_LAMBDA(
+              typename Kokkos::TeamPolicy<ExecutionSpace>::member_type){},
+          Kokkos::ParallelForTag{});
+  if (team_size > team_size_max) team_size = team_size_max;
   passed = passed && test_scalar<int, ExecutionSpace>(317, team_size, test);
   passed = passed &&
            test_scalar<long long int, ExecutionSpace>(317, team_size, test);
@@ -794,15 +798,18 @@ class TestTripleNestedReduce {
     run_test(nrows, ncols, team_size, vector_length);
   }
 
-  void run_test(const size_type &nrows, const size_type &ncols,
-                size_type team_size, const size_type &vector_length) {
-    auto const concurrency =
-        static_cast<size_type>(execution_space().concurrency());
-    if (team_size > concurrency) team_size = concurrency;
+  void run_test(const size_type &nrows, const size_type &ncols, int team_size,
+                const size_type &vector_length) {
+    int const max_team_size =
+        Kokkos::TeamPolicy<execution_space>(1, 1).team_size_max(
+            KOKKOS_LAMBDA(
+                typename Kokkos::TeamPolicy<execution_space>::member_type){},
+            Kokkos::ParallelForTag{});
+    if (team_size > max_team_size) team_size = max_team_size;
 
 #ifdef KOKKOS_ENABLE_HPX
     team_size = 1;
-    if (!std::is_same<execution_space, Kokkos::Experimental::HPX>::value) {
+    if (!std::is_same_v<execution_space, Kokkos::Experimental::HPX>) {
       team_size = 1;
     }
 #endif
@@ -975,8 +982,9 @@ struct checkScan {
 
     Kokkos::View<value_type[n], Kokkos::HostSpace> expected("expected");
     {
+      typename Reducer::result_view_type result("result");
+      Reducer reducer(result);
       value_type identity;
-      Reducer reducer = {identity};
       reducer.init(identity);
 
       for (int i = 0; i < expected.extent_int(0); ++i) {
@@ -988,6 +996,14 @@ struct checkScan {
                 : (vector == 0 ? identity : host_inputs(i - 1));
         expected(i) = accum;
         reducer.join(expected(i), val);
+// This fence should not be necessary, however MSVC produces the wrong
+// result for expected without it since some version released in mid 2025.
+// Specifically VS 2022 17.12.3 did not have it 17.14.7 does.
+// It doesn't matter where inside this loop over i the fence goes, but it
+// can't be outside the loop.
+#ifdef KOKKOS_COMPILER_MSVC  // FIXME_MSVC
+        Kokkos::memory_fence();
+#endif
       }
     }
     for (int i = 0; i < host_outputs.extent_int(0); ++i)
@@ -1018,20 +1034,22 @@ TEST(TEST_CATEGORY, triple_nested_parallelism) {
 // GPU) See https://github.com/kokkos/kokkos/issues/1513
 // For Intel GPUs, the requested workgroup size is just too large here.
 #if defined(KOKKOS_ENABLE_DEBUG) && defined(KOKKOS_ENABLE_CUDA)
-  if (!std::is_same<TEST_EXECSPACE, Kokkos::Cuda>::value)
+  if (!std::is_same_v<TEST_EXECSPACE, Kokkos::Cuda>)
 #elif defined(KOKKOS_ENABLE_SYCL)
-  if (!std::is_same<TEST_EXECSPACE, Kokkos::SYCL>::value)
+  if (!std::is_same_v<TEST_EXECSPACE, Kokkos::SYCL>)
 #endif
   {
     TestTripleNestedReduce<double, TEST_EXECSPACE>(8192, 2048, 32, 32);
     TestTripleNestedReduce<double, TEST_EXECSPACE>(8192, 2048, 32, 16);
   }
 #if defined(KOKKOS_ENABLE_SYCL)
-  if (!std::is_same<TEST_EXECSPACE, Kokkos::SYCL>::value)
+  if (!std::is_same_v<TEST_EXECSPACE, Kokkos::SYCL>)
 #endif
   {
+#ifdef KOKKOS_ENABLE_DEPRECATED_CODE_5
     TestTripleNestedReduce<double, TEST_EXECSPACE>(8192, 2048, 16, 33);
     TestTripleNestedReduce<double, TEST_EXECSPACE>(8192, 2048, 16, 19);
+#endif
   }
   TestTripleNestedReduce<double, TEST_EXECSPACE>(8192, 2048, 16, 16);
   TestTripleNestedReduce<double, TEST_EXECSPACE>(8192, 2048, 7, 16);
@@ -1071,6 +1089,66 @@ TEST(TEST_CATEGORY, parallel_scan_with_reducers) {
 
   (void)n;
   (void)n_vector_range;
+}
+
+namespace ThreadVectorScanReturnValue {
+// ThreadVectorRange parallel_scan with reducer must write the total back to
+// reducer.reference(). Check the (range, functor, const Reducer&) overload.
+// Each thread does a local scan and stores the result to be compared on the
+// host.
+template <class ExecutionSpace, class Reducer>
+void check_scan_return_value() {
+  using value_type = typename Reducer::value_type;
+  using policy_t   = Kokkos::TeamPolicy<ExecutionSpace>;
+  using member_t   = typename policy_t::member_type;
+
+  const int n_vector = 13;
+  const int n_thread = 7;
+  const int league   = 2;
+
+  Kokkos::View<value_type *, ExecutionSpace> totals("totals",
+                                                    league * n_thread);
+
+  Kokkos::parallel_for(
+      policy_t(league, Kokkos::AUTO), KOKKOS_LAMBDA(const member_t &team) {
+        Kokkos::parallel_for(
+            Kokkos::TeamThreadRange(team, n_thread), [&](const int i) {
+              const int chunk = team.league_rank() * n_thread + i;
+              value_type local{};
+              const Reducer reducer(local);
+              Kokkos::parallel_scan(
+                  Kokkos::ThreadVectorRange(team, n_vector),
+                  [&](const int j, value_type &upd, const bool /*final*/) {
+                    const value_type contrib = static_cast<value_type>(j + 1);
+                    reducer.join(upd, contrib);
+                  },
+                  reducer);
+              totals(chunk) = local;
+            });
+      });
+  Kokkos::fence();
+
+  value_type expected{};
+  {
+    Reducer reducer(expected);
+    reducer.init(expected);
+    for (int j = 0; j < n_vector; ++j) {
+      const value_type contrib = static_cast<value_type>(j + 1);
+      reducer.join(expected, contrib);
+    }
+  }
+
+  auto h_totals = Kokkos::create_mirror_view_and_copy(totals);
+  for (int i = 0; i < league * n_thread; ++i) {
+    ASSERT_EQ(h_totals(i), expected) << "differ at chunk " << i;
+  }
+}
+}  // namespace ThreadVectorScanReturnValue
+
+TEST(TEST_CATEGORY, thread_vector_scan_return_value) {
+  using T = double;
+  ThreadVectorScanReturnValue::check_scan_return_value<
+      TEST_EXECSPACE, Kokkos::Max<T, TEST_EXECSPACE>>();
 }
 
 }  // namespace Test

@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOSODE_NEWTON_HPP
 #define KOKKOSODE_NEWTON_HPP
@@ -35,8 +22,8 @@ struct Newton {
   KOKKOS_FUNCTION static newton_solver_status Solve(const system_type& sys, const Newton_params& params,
                                                     const mat_type& J, const mat_type& tmp, const ini_vec_type& y0,
                                                     const rhs_vec_type& rhs, const update_type& update,
-                                                    const scale_type& scale) {
-    return KokkosODE::Impl::NewtonSolve(sys, params, J, tmp, y0, rhs, update, scale);
+                                                    const scale_type& scale, int& newton_iterations) {
+    return KokkosODE::Impl::NewtonSolve(sys, params, J, tmp, y0, rhs, update, scale, newton_iterations);
   }
 };
 
