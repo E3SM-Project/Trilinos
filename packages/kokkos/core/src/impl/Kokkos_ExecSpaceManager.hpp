@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_EXEC_SPACE_MANAGER_HPP
 #define KOKKOS_EXEC_SPACE_MANAGER_HPP
@@ -21,12 +8,13 @@
 #include <Kokkos_DetectionIdiom.hpp>
 #include <Kokkos_Concepts.hpp>
 
+#include <concepts>
 #include <iosfwd>
 #include <map>
 #include <string>
 #include <utility>
 
-namespace {
+namespace Kokkos::Impl {
 
 template <class T>
 using public_member_types_t = std::enable_if_t<
@@ -34,7 +22,8 @@ using public_member_types_t = std::enable_if_t<
     Kokkos::is_memory_space_v<typename T::memory_space> &&
     Kokkos::is_device_v<typename T::device_type> &&
     Kokkos::is_array_layout_v<typename T::array_layout> &&
-    std::is_integral_v<typename T::size_type> &&
+    std::unsigned_integral<typename T::size_type> &&
+    std::signed_integral<typename T::index_type> &&
     Kokkos::is_memory_space_v<typename T::scratch_memory_space>>;
 
 template <class T>
@@ -98,6 +87,9 @@ constexpr bool check_valid_execution_space() {
   using Kokkos::is_detected_v;
   static_assert(std::is_default_constructible_v<ExecutionSpace>);
   static_assert(is_detected_v<public_member_types_t, ExecutionSpace>);
+  static_assert(
+      std::is_same_v<typename ExecutionSpace::index_type,
+                     std::make_signed_t<typename ExecutionSpace::size_type>>);
   static_assert(is_detected_v<print_configuration_t, ExecutionSpace>);
   static_assert(is_detected_v<initialize_finalize_t, ExecutionSpace>);
   static_assert(is_detected_v<fence_t, ExecutionSpace>);
@@ -105,11 +97,6 @@ constexpr bool check_valid_execution_space() {
   static_assert(sizeof(ExecutionSpace) <= 2 * sizeof(void*));
   return true;
 }
-
-}  // namespace
-
-namespace Kokkos {
-namespace Impl {
 
 struct ExecSpaceBase {
   virtual void initialize(InitializationSettings const&)           = 0;
@@ -162,7 +149,6 @@ int initialize_space_factory(std::string name) {
   return 1;
 }
 
-}  // namespace Impl
-}  // namespace Kokkos
+}  // namespace Kokkos::Impl
 
 #endif

@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_OPENMP_PARALLEL_SCAN_HPP
 #define KOKKOS_OPENMP_PARALLEL_SCAN_HPP
@@ -47,7 +34,7 @@ class ParallelScan<FunctorType, Kokkos::RangePolicy<Traits...>,
   const Policy m_policy;
 
   template <class TagType>
-  inline static std::enable_if_t<std::is_void<TagType>::value> exec_range(
+  inline static std::enable_if_t<std::is_void_v<TagType>> exec_range(
       const FunctorType& functor, const Member ibeg, const Member iend,
       reference_type update, const bool final) {
     for (Member iwork = ibeg; iwork < iend; ++iwork) {
@@ -56,7 +43,7 @@ class ParallelScan<FunctorType, Kokkos::RangePolicy<Traits...>,
   }
 
   template <class TagType>
-  inline static std::enable_if_t<!std::is_void<TagType>::value> exec_range(
+  inline static std::enable_if_t<!std::is_void_v<TagType>> exec_range(
       const FunctorType& functor, const Member ibeg, const Member iend,
       reference_type update, const bool final) {
     const TagType t{};
@@ -173,7 +160,7 @@ class ParallelScanWithTotal<FunctorType, Kokkos::RangePolicy<Traits...>,
   const pointer_type m_result_ptr;
 
   template <class TagType>
-  inline static std::enable_if_t<std::is_void<TagType>::value> exec_range(
+  inline static std::enable_if_t<std::is_void_v<TagType>> exec_range(
       const FunctorType& functor, const Member ibeg, const Member iend,
       reference_type update, const bool final) {
     for (Member iwork = ibeg; iwork < iend; ++iwork) {
@@ -182,7 +169,7 @@ class ParallelScanWithTotal<FunctorType, Kokkos::RangePolicy<Traits...>,
   }
 
   template <class TagType>
-  inline static std::enable_if_t<!std::is_void<TagType>::value> exec_range(
+  inline static std::enable_if_t<!std::is_void_v<TagType>> exec_range(
       const FunctorType& functor, const Member ibeg, const Member iend,
       reference_type update, const bool final) {
     const TagType t{};
@@ -281,8 +268,8 @@ class ParallelScanWithTotal<FunctorType, Kokkos::RangePolicy<Traits...>,
         m_policy(arg_policy),
         m_result_ptr(arg_result_view.data()) {
     static_assert(
-        Kokkos::Impl::MemorySpaceAccess<typename ViewType::memory_space,
-                                        Kokkos::HostSpace>::accessible,
+        Kokkos::Impl::MemorySpaceAccess<
+            Kokkos::HostSpace, typename ViewType::memory_space>::accessible,
         "Kokkos::OpenMP parallel_scan result must be host-accessible!");
     m_instance = arg_policy.space().impl_internal_space_instance();
   }

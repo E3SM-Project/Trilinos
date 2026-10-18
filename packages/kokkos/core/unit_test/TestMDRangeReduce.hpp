@@ -1,22 +1,14 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #include <gtest/gtest.h>
 
+#include <Kokkos_Macros.hpp>
+#ifdef KOKKOS_ENABLE_EXPERIMENTAL_CXX20_MODULES
+import kokkos.core;
+#else
 #include <Kokkos_Core.hpp>
+#endif
 
 namespace {
 
@@ -46,21 +38,33 @@ void MDRangeReduceTester([[maybe_unused]] int bound, int k) {
 }
 
 TEST(TEST_CATEGORY, mdrange_parallel_reduce_primitive_types) {
-#if defined(KOKKOS_ENABLE_OPENMPTARGET)
-  GTEST_SKIP() << "FIXME OPENMPTARGET Tests of MDRange reduce over values "
-                  "smaller than int would fail";
-#else
-  for (int bound : {0, 1, 7, 32, 65, 7000}) {
-    for (int k = 0; k < bound; ++k) {
-      MDRangeReduceTester<bool>(bound, k);
-      MDRangeReduceTester<signed char>(bound, k);
-      MDRangeReduceTester<int8_t>(bound, k);
-      MDRangeReduceTester<int16_t>(bound, k);
-      MDRangeReduceTester<int32_t>(bound, k);
-      MDRangeReduceTester<int64_t>(bound, k);
+  auto doit = [](int bound, int k) {
+    MDRangeReduceTester<bool>(bound, k);
+    MDRangeReduceTester<signed char>(bound, k);
+    MDRangeReduceTester<int8_t>(bound, k);
+    MDRangeReduceTester<int16_t>(bound, k);
+    MDRangeReduceTester<int32_t>(bound, k);
+    MDRangeReduceTester<int64_t>(bound, k);
+  };
+
+// FIXME_NEXTSILICON: full sequence very slow in handoff 1.3.0-120
+#ifdef KOKKOS_ENABLE_NEXTSILICON
+  if constexpr (std::is_same_v<TEST_EXECSPACE,
+                               Kokkos::Experimental::NextSilicon>) {
+    for (int bound : {0, 7000}) {
+      for (int k : {0, 3500, 6999}) {
+        if (k < bound) doit(bound, k);
+      }
     }
+    SUCCEED() << "ran shorter NextSilicon test";
+    return;
   }
 #endif
+  for (int bound : {0, 1, 7, 32, 65, 7000}) {
+    for (int k = 0; k < bound; ++k) {
+      doit(bound, k);
+    }
+  }
 }
 
 }  // namespace

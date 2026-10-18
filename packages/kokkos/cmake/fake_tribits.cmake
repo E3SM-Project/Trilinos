@@ -60,6 +60,10 @@ function(KOKKOS_ADD_TEST)
     add_test(NAME ${TEST_NAME} WORKING_DIRECTORY ${LIBRARY_OUTPUT_PATH} COMMAND ${EXE}${CMAKE_EXECUTABLE_SUFFIX}
                                                                                 ${TEST_ARGS} ${${TEST_NAME}_EXTRA_ARGS}
     )
+  elseif(KOKKOS_ENABLE_NEXTSILICON)
+    add_test(NAME ${TEST_NAME} COMMAND ${KOKKOS_SOURCE_DIR}/scripts/nextsilicon-test-wrapper.sh ${EXE} ${TEST_ARGS}
+                                       ${${TEST_NAME}_EXTRA_ARGS}
+    )
   else()
     add_test(NAME ${TEST_NAME} COMMAND ${EXE} ${TEST_ARGS} ${${TEST_NAME}_EXTRA_ARGS})
   endif()
@@ -84,10 +88,25 @@ function(KOKKOS_ADD_TEST)
   endif()
   if(TEST_TOOL)
     add_dependencies(${EXE} ${TEST_TOOL}) #make sure the exe has to build the tool
-    set_property(
-      TEST ${TEST_NAME} APPEND_STRING PROPERTY ENVIRONMENT "KOKKOS_PROFILE_LIBRARY=$<TARGET_FILE:${TEST_TOOL}>"
-    )
+    set_property(TEST ${TEST_NAME} APPEND_STRING PROPERTY ENVIRONMENT "KOKKOS_TOOLS_LIBS=$<TARGET_FILE:${TEST_TOOL}>")
   endif()
+
+  # This tool will get applied by default unless DefaultInstance is specified in the test name
+  # Requires libdl.
+  if(NOT WIN32)
+    string(FIND "${TEST_NAME}" "DefaultInstance" index)
+    if((NOT TEST_TOOL)
+       AND (${index} LESS 0)
+       AND (KOKKOS_ENABLE_LIBDL)
+       AND (NOT KOKKOS_ENABLE_LARGE_MEM_TESTS)
+    )
+      set_property(
+        TEST ${TEST_NAME} APPEND PROPERTY ENVIRONMENT_MODIFICATION
+                                          KOKKOS_TOOLS_LIBS=cmake_list_append:$<TARGET_FILE:kokkoshwmtracker-tool>
+      )
+    endif()
+  endif()
+
   verify_empty(KOKKOS_ADD_TEST ${TEST_UNPARSED_ARGUMENTS})
 endfunction()
 
