@@ -1,28 +1,13 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
-#ifndef _KOKKOS_SPGEMM_NUMERIC_HPP
-#define _KOKKOS_SPGEMM_NUMERIC_HPP
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
+#ifndef KOKKOSSPARSE_SPGEMM_NUMERIC_HPP
+#define KOKKOSSPARSE_SPGEMM_NUMERIC_HPP
 
 #include "KokkosKernels_helpers.hpp"
 #include "KokkosSparse_spgemm_numeric_spec.hpp"
 #include "KokkosSparse_bspgemm_numeric_spec.hpp"
 
 namespace KokkosSparse {
-
-namespace Experimental {
 
 //
 // NOTE: block_dim = 1 for CRS-formated views
@@ -190,18 +175,6 @@ void spgemm_numeric(KernelHandle *handle, typename KernelHandle::const_nnz_lno_t
   Internal_clno_nnz_view_t_ nonconst_c_l(entriesC.data(), entriesC.extent(0));
   Internal_cscalar_nnz_view_t_ nonconst_c_s(valuesC.data(), valuesC.extent(0));
 
-  if (block_dim > 1) {
-    KokkosSparse::Impl::BSPGEMM_NUMERIC<
-        const_handle_type, Internal_alno_row_view_t_, Internal_alno_nnz_view_t_, Internal_ascalar_nnz_view_t_,
-        Internal_blno_row_view_t_, Internal_blno_nnz_view_t_, Internal_bscalar_nnz_view_t_, Internal_clno_row_view_t_,
-        Internal_clno_nnz_view_t_, Internal_cscalar_nnz_view_t_>::bspgemm_numeric(&tmp_handle, m, n, k, block_dim,
-                                                                                  const_a_r, const_a_l, const_a_s,
-                                                                                  transposeA, const_b_r, const_b_l,
-                                                                                  const_b_s, transposeB, const_c_r,
-                                                                                  nonconst_c_l, nonconst_c_s);
-    return;
-  }
-
   auto spgemmHandle = tmp_handle.get_spgemm_handle();
 
   if (!spgemmHandle) {
@@ -220,9 +193,47 @@ void spgemm_numeric(KernelHandle *handle, typename KernelHandle::const_nnz_lno_t
 
   auto algo = spgemmHandle->get_algorithm_type();
 
-  if (algo == SPGEMM_DEBUG || algo == SPGEMM_SERIAL) {
-    // Never call a TPL if serial/debug is requested (this is needed for
-    // testing)
+  if (block_dim > 1) {
+    if (Impl::is_spgemm_algorithm_native(algo)) {
+      KokkosSparse::Impl::BSPGEMM_NUMERIC<
+          const_handle_type, Internal_alno_row_view_t_, Internal_alno_nnz_view_t_, Internal_ascalar_nnz_view_t_,
+          Internal_blno_row_view_t_, Internal_blno_nnz_view_t_, Internal_bscalar_nnz_view_t_, Internal_clno_row_view_t_,
+          Internal_clno_nnz_view_t_, Internal_cscalar_nnz_view_t_, false>::bspgemm_numeric(&tmp_handle, m, n, k,
+                                                                                           block_dim, const_a_r,
+                                                                                           const_a_l, const_a_s,
+                                                                                           transposeA, const_b_r,
+                                                                                           const_b_l, const_b_s,
+                                                                                           transposeB, const_c_r,
+                                                                                           nonconst_c_l, nonconst_c_s);
+    } else {
+      KokkosSparse::Impl::BSPGEMM_NUMERIC<
+          const_handle_type, Internal_alno_row_view_t_, Internal_alno_nnz_view_t_, Internal_ascalar_nnz_view_t_,
+          Internal_blno_row_view_t_, Internal_blno_nnz_view_t_, Internal_bscalar_nnz_view_t_, Internal_clno_row_view_t_,
+          Internal_clno_nnz_view_t_, Internal_cscalar_nnz_view_t_>::bspgemm_numeric(&tmp_handle, m, n, k, block_dim,
+                                                                                    const_a_r, const_a_l, const_a_s,
+                                                                                    transposeA, const_b_r, const_b_l,
+                                                                                    const_b_s, transposeB, const_c_r,
+                                                                                    nonconst_c_l, nonconst_c_s);
+    }
+    return;
+  }
+
+  // Decide at runtime whether to fallback to native. In general, we fall back if the TPL for
+  // this algo/exec space requires sorted inputs, and the user has not told us that the inputs are sorted.
+  bool useFallback = !spgemmHandle->get_input_sorted() &&
+                     Impl::algorithm_may_require_sorted_input<c_exec_t, /* NonReuse */ false>(algo);
+  // rocSPARSE can handle unsorted inputs when certain nnz/row and intermediate product
+  // limits are satisfied. Check the actual matrices to avoid an unnecessary fallback.
+#ifdef KOKKOSKERNELS_ENABLE_TPL_ROCSPARSE
+  if (useFallback &&
+      Impl::spgemm_numeric_tpl_spec_avail<
+          const_handle_type, Internal_alno_row_view_t_, Internal_alno_nnz_view_t_, Internal_ascalar_nnz_view_t_,
+          Internal_blno_row_view_t_, Internal_blno_nnz_view_t_, Internal_bscalar_nnz_view_t_, Internal_clno_row_view_t_,
+          Internal_clno_nnz_view_t_, Internal_cscalar_nnz_view_t_>::value) {
+    if (Impl::rocsparse_can_handle_unsorted_inputs(c_exec_t(), const_a_r, const_b_r)) useFallback = false;
+  }
+#endif
+  if (Impl::is_spgemm_algorithm_native(algo) || useFallback) {
     KokkosSparse::Impl::SPGEMM_NUMERIC<
         const_handle_type,  // KernelHandle,
         Internal_alno_row_view_t_, Internal_alno_nnz_view_t_, Internal_ascalar_nnz_view_t_, Internal_blno_row_view_t_,
@@ -243,7 +254,6 @@ void spgemm_numeric(KernelHandle *handle, typename KernelHandle::const_nnz_lno_t
   }
 }
 
-}  // namespace Experimental
 }  // namespace KokkosSparse
 
 #endif

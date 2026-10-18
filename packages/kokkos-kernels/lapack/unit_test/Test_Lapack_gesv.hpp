@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 // only enable this test where KokkosLapack supports gesv:
 // CUDA+(MAGMA or CUSOLVER), HIP+(MAGMA or ROCSOLVER) and HOST+LAPACK
@@ -38,7 +25,7 @@ template <class ViewTypeA, class ViewTypeB, class Device, bool MAGMA>
 void impl_test_gesv(const char* mode, const char* padding, int N) {
   using execution_space = typename Device::execution_space;
   using ScalarA         = typename ViewTypeA::value_type;
-  using ats             = Kokkos::ArithTraits<ScalarA>;
+  using ats             = KokkosKernels::ArithTraits<ScalarA>;
 
   execution_space space{};
 
@@ -60,8 +47,8 @@ void impl_test_gesv(const char* mode, const char* padding, int N) {
   ViewTypeB B("B", lddb);
 
   // Create host mirrors of device views.
-  typename ViewTypeB::HostMirror h_X0 = Kokkos::create_mirror_view(X0);
-  typename ViewTypeB::HostMirror h_B  = Kokkos::create_mirror(B);
+  typename ViewTypeB::host_mirror_type h_X0 = Kokkos::create_mirror_view(X0);
+  typename ViewTypeB::host_mirror_type h_B  = Kokkos::create_mirror(B);
 
   // Initialize data.
   Kokkos::fill_random(A, rand_pool, Kokkos::rand<Kokkos::Random_XorShift64<execution_space>, ScalarA>::max());
@@ -79,7 +66,7 @@ void impl_test_gesv(const char* mode, const char* padding, int N) {
 
   // Allocate IPIV view on host
   using ViewTypeP = typename std::conditional<MAGMA, Kokkos::View<int*, Kokkos::LayoutLeft, Kokkos::HostSpace>,
-                                              Kokkos::View<int*, Kokkos::LayoutLeft, execution_space>>::type;
+                                              Kokkos::View<int*, Kokkos::LayoutLeft, Device>>::type;
   ViewTypeP ipiv;
   int Nt = 0;
   if (mode[0] == 'Y') {
@@ -99,10 +86,10 @@ void impl_test_gesv(const char* mode, const char* padding, int N) {
 #ifdef KOKKOSKERNELS_ENABLE_TPL_MAGMA   // have MAGMA TPL
 #ifdef KOKKOSKERNELS_ENABLE_TPL_LAPACK  // and have LAPACK TPL
 #if defined(KOKKOS_ENABLE_CUDA)
-    nopivot_runtime_err = (!std::is_same<typename Device::memory_space, Kokkos::CudaSpace>::value) &&
+    nopivot_runtime_err = (!std::is_same<typename Device::execution_space, Kokkos::Cuda>::value) &&
                           (ipiv.extent(0) == 0) && (ipiv.data() == nullptr);
 #elif defined(KOKKOS_ENABLE_HIP)
-    nopivot_runtime_err = (!std::is_same<typename Device::memory_space, Kokkos::HIPSpace>::value) &&
+    nopivot_runtime_err = (!std::is_same<typename Device::execution_space, Kokkos::HIP>::value) &&
                           (ipiv.extent(0) == 0) && (ipiv.data() == nullptr);
 #endif
     notpl_runtime_err = false;
@@ -146,7 +133,7 @@ template <class ViewTypeA, class ViewTypeB, class Device, bool MAGMA>
 void impl_test_gesv_mrhs(const char* mode, const char* padding, int N, int nrhs) {
   using execution_space = typename Device::execution_space;
   using ScalarA         = typename ViewTypeA::value_type;
-  using ats             = Kokkos::ArithTraits<ScalarA>;
+  using ats             = KokkosKernels::ArithTraits<ScalarA>;
 
   execution_space space{};
 
@@ -168,8 +155,8 @@ void impl_test_gesv_mrhs(const char* mode, const char* padding, int N, int nrhs)
   ViewTypeB B("B", lddb, nrhs);
 
   // Create host mirrors of device views.
-  typename ViewTypeB::HostMirror h_X0 = Kokkos::create_mirror_view(X0);
-  typename ViewTypeB::HostMirror h_B  = Kokkos::create_mirror(B);
+  typename ViewTypeB::host_mirror_type h_X0 = Kokkos::create_mirror_view(X0);
+  typename ViewTypeB::host_mirror_type h_B  = Kokkos::create_mirror(B);
 
   // Initialize data.
   Kokkos::fill_random(A, rand_pool, Kokkos::rand<Kokkos::Random_XorShift64<execution_space>, ScalarA>::max());
@@ -187,7 +174,7 @@ void impl_test_gesv_mrhs(const char* mode, const char* padding, int N, int nrhs)
 
   // Allocate IPIV view on host
   using ViewTypeP = typename std::conditional<MAGMA, Kokkos::View<int*, Kokkos::LayoutLeft, Kokkos::HostSpace>,
-                                              Kokkos::View<int*, Kokkos::LayoutLeft, execution_space>>::type;
+                                              Kokkos::View<int*, Kokkos::LayoutLeft, Device>>::type;
   ViewTypeP ipiv;
   int Nt = 0;
   if (mode[0] == 'Y') {
@@ -207,10 +194,10 @@ void impl_test_gesv_mrhs(const char* mode, const char* padding, int N, int nrhs)
 #ifdef KOKKOSKERNELS_ENABLE_TPL_MAGMA   // have MAGMA TPL
 #ifdef KOKKOSKERNELS_ENABLE_TPL_LAPACK  // and have LAPACK TPL
 #if defined(KOKKOS_ENABLE_CUDA)
-    nopivot_runtime_err = (!std::is_same<typename Device::memory_space, Kokkos::CudaSpace>::value) &&
+    nopivot_runtime_err = (!std::is_same<typename Device::execution_space, Kokkos::Cuda>::value) &&
                           (ipiv.extent(0) == 0) && (ipiv.data() == nullptr);
 #elif defined(KOKKOS_ENABLE_HIP)
-    nopivot_runtime_err = (!std::is_same<typename Device::memory_space, Kokkos::HIPSpace>::value) &&
+    nopivot_runtime_err = (!std::is_same<typename Device::execution_space, Kokkos::HIP>::value) &&
                           (ipiv.extent(0) == 0) && (ipiv.data() == nullptr);
 #endif
     notpl_runtime_err = false;
