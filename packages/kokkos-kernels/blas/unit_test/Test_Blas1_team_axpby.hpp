@@ -1,23 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
-// Note: Luc Berger-Vergiat 04/14/21
-//       This tests uses KOKKOS_LAMBDA so we need
-//       to make sure that these are enabled in
-//       the CUDA backend before including this test.
-#if !defined(TEST_CUDA_BLAS_CPP) || defined(KOKKOS_ENABLE_CUDA_LAMBDA)
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #include <gtest/gtest.h>
 #include <Kokkos_Core.hpp>
@@ -45,9 +27,9 @@ void impl_test_team_axpby(int N) {
   ScalarB b  = 5;
   double eps = std::is_same<ScalarA, float>::value ? 2 * 1e-5 : 1e-7;
 
-  view_stride_adapter<ViewTypeA> x("X", N);
-  view_stride_adapter<ViewTypeB> y("Y", N);
-  view_stride_adapter<ViewTypeB> org_y("Y", N);
+  TestUtils::view_stride_adapter<ViewTypeA> x("X", N);
+  TestUtils::view_stride_adapter<ViewTypeB> y("Y", N);
+  TestUtils::view_stride_adapter<ViewTypeB> org_y("Y", N);
 
   Kokkos::Random_XorShift64_Pool<execution_space> rand_pool(13718);
 
@@ -109,9 +91,9 @@ void impl_test_team_axpby_mv(int N, int K) {
   typedef typename ViewTypeA::value_type ScalarA;
   typedef typename ViewTypeB::value_type ScalarB;
 
-  view_stride_adapter<ViewTypeA> x("X", N, K);
-  view_stride_adapter<ViewTypeB> y("Y", N, K);
-  view_stride_adapter<ViewTypeB> org_y("Org_Y", N, K);
+  TestUtils::view_stride_adapter<ViewTypeA> x("X", N, K);
+  TestUtils::view_stride_adapter<ViewTypeB> y("Y", N, K);
+  TestUtils::view_stride_adapter<ViewTypeB> org_y("Org_Y", N, K);
 
   Kokkos::Random_XorShift64_Pool<execution_space> rand_pool(13718);
 
@@ -137,7 +119,7 @@ void impl_test_team_axpby_mv(int N, int K) {
 
   Kokkos::View<ScalarB *, Kokkos::HostSpace> r("Dot::Result", K);
 
-  typedef Kokkos::ArithTraits<ScalarA> AT;
+  typedef KokkosKernels::ArithTraits<ScalarA> AT;
 
   // KokkosBlas::axpby(a,x,b,y);
   Kokkos::parallel_for(
@@ -286,5 +268,3 @@ TEST_F(TestCategory, team_axpby_mv_int) { test_team_axpby_mv<int, int, TestDevic
 TEST_F(TestCategory, team_axpby_double_int) { test_team_axpby<double, int, TestDevice>(); }
 TEST_F(TestCategory, team_axpby_double_mv_int) { test_team_axpby_mv<double, int, TestDevice>(); }
 #endif
-
-#endif  // check for lambda availability in CUDA backend
