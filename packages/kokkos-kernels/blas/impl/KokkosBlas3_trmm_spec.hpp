@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #ifndef KOKKOSBLAS3_TRMM_SPEC_HPP_
 #define KOKKOSBLAS3_TRMM_SPEC_HPP_
 
@@ -36,21 +23,19 @@ struct trmm_eti_spec_avail {
 //
 // This Macro is for readability of the template arguments.
 //
-#define KOKKOSBLAS3_TRMM_ETI_SPEC_AVAIL_LAYOUT(SCALAR, LAYOUTA, LAYOUTB, EXEC_SPACE, MEM_SPACE)           \
-  template <>                                                                                             \
-  struct trmm_eti_spec_avail<EXEC_SPACE,                                                                  \
-                             Kokkos::View<const SCALAR**, LAYOUTA, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, \
-                                          Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                      \
-                             Kokkos::View<SCALAR**, LAYOUTB, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,       \
-                                          Kokkos::MemoryTraits<Kokkos::Unmanaged> > > {                   \
-    enum : bool { value = true };                                                                         \
+#define KOKKOSBLAS3_TRMM_ETI_SPEC_AVAIL_LAYOUT(SCALAR, LAYOUT, EXEC_SPACE)                                    \
+  template <>                                                                                                 \
+  struct trmm_eti_spec_avail<                                                                                 \
+      EXEC_SPACE, Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
+      Kokkos::View<SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> > > {                \
+    enum : bool { value = true };                                                                             \
   };
 
 //
 // This Macros provides the ETI specialization of trmm
 //
-#define KOKKOSBLAS3_TRMM_ETI_SPEC_AVAIL(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE) \
-  KOKKOSBLAS3_TRMM_ETI_SPEC_AVAIL_LAYOUT(SCALAR, LAYOUT, LAYOUT, EXEC_SPACE, MEM_SPACE)
+#define KOKKOSBLAS3_TRMM_ETI_SPEC_AVAIL(SCALAR, LAYOUT, EXEC_SPACE) \
+  KOKKOSBLAS3_TRMM_ETI_SPEC_AVAIL_LAYOUT(SCALAR, LAYOUT, EXEC_SPACE)
 
 // Include the actual specialization declarations
 #include <KokkosBlas3_trmm_tpl_spec_avail.hpp>
@@ -85,16 +70,16 @@ struct TRMM<execution_space, AVIT, BVIT, false, KOKKOSKERNELS_IMPL_COMPILE_LIBRA
     Kokkos::Profiling::pushRegion(KOKKOSKERNELS_IMPL_COMPILE_LIBRARY ? "KokkosBlas::trmm[ETI]"
                                                                      : "KokkosBlas::trmm[noETI]");
 
-    typename AVIT::HostMirror host_A = Kokkos::create_mirror_view(A);
-    typename BVIT::HostMirror host_B = Kokkos::create_mirror_view(B);
+    typename AVIT::host_mirror_type host_A = Kokkos::create_mirror_view(A);
+    typename BVIT::host_mirror_type host_B = Kokkos::create_mirror_view(B);
 
     // Copy A to host_A and B to host_B
     // no-op if A and B MemorySpace is HostSpace
     Kokkos::deep_copy(host_A, A);
     Kokkos::deep_copy(host_B, B);
 
-    SerialTrmm_Invoke<typename AVIT::HostMirror, typename BVIT::HostMirror>(side, uplo, trans, diag, alpha, host_A,
-                                                                            host_B);
+    SerialTrmm_Invoke<typename AVIT::host_mirror_type, typename BVIT::host_mirror_type>(side, uplo, trans, diag, alpha,
+                                                                                        host_A, host_B);
 
     // Copy host_B to B
     // no-op if B's MemorySpace is HostSpace
@@ -112,21 +97,15 @@ struct TRMM<execution_space, AVIT, BVIT, false, KOKKOSKERNELS_IMPL_COMPILE_LIBRA
 //
 // These Macros are for readability.
 //
-#define KOKKOSBLAS3_TRMM_ETI_SPEC_DECL_LAYOUTS(SCALAR, LAYOUTA, LAYOUTB, EXEC_SPACE, MEM_SPACE)            \
-  extern template struct TRMM<EXEC_SPACE,                                                                  \
-                              Kokkos::View<const SCALAR**, LAYOUTA, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, \
-                                           Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                      \
-                              Kokkos::View<SCALAR**, LAYOUTB, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,       \
-                                           Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                      \
-                              false, true>;
+#define KOKKOSBLAS3_TRMM_ETI_SPEC_DECL_LAYOUTS(SCALAR, LAYOUT, EXEC_SPACE)                                    \
+  extern template struct TRMM<                                                                                \
+      EXEC_SPACE, Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
+      Kokkos::View<SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, false, true>;
 
-#define KOKKOSBLAS3_TRMM_ETI_SPEC_INST_LAYOUTS(SCALAR, LAYOUTA, LAYOUTB, EXEC_SPACE, MEM_SPACE)     \
-  template struct TRMM<EXEC_SPACE,                                                                  \
-                       Kokkos::View<const SCALAR**, LAYOUTA, Kokkos::Device<EXEC_SPACE, MEM_SPACE>, \
-                                    Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                      \
-                       Kokkos::View<SCALAR**, LAYOUTB, Kokkos::Device<EXEC_SPACE, MEM_SPACE>,       \
-                                    Kokkos::MemoryTraits<Kokkos::Unmanaged> >,                      \
-                       false, true>;
+#define KOKKOSBLAS3_TRMM_ETI_SPEC_INST_LAYOUTS(SCALAR, LAYOUT, EXEC_SPACE)                                    \
+  template struct TRMM<                                                                                       \
+      EXEC_SPACE, Kokkos::View<const SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, \
+      Kokkos::View<SCALAR**, LAYOUT, EXEC_SPACE, Kokkos::MemoryTraits<Kokkos::Unmanaged> >, false, true>;
 
 //
 // These Macros are only included when we are not compiling libkokkoskernels but
@@ -135,13 +114,13 @@ struct TRMM<execution_space, AVIT, BVIT, false, KOKKOSKERNELS_IMPL_COMPILE_LIBRA
 // "extern template" skips the implicit instatiation step ensuring that the
 // callers code uses this explicit instantiation definition of TRMM.
 //
-#define KOKKOSBLAS3_TRMM_ETI_SPEC_DECL(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE) \
-  KOKKOSBLAS3_TRMM_ETI_SPEC_DECL_LAYOUTS(SCALAR, LAYOUT, LAYOUT, EXEC_SPACE, MEM_SPACE)
+#define KOKKOSBLAS3_TRMM_ETI_SPEC_DECL(SCALAR, LAYOUT, EXEC_SPACE) \
+  KOKKOSBLAS3_TRMM_ETI_SPEC_DECL_LAYOUTS(SCALAR, LAYOUT, EXEC_SPACE)
 
 #include <generated_specializations_hpp/KokkosBlas3_trmm_eti_spec_decl.hpp>
 
-#define KOKKOSBLAS3_TRMM_ETI_SPEC_INST(SCALAR, LAYOUT, EXEC_SPACE, MEM_SPACE) \
-  KOKKOSBLAS3_TRMM_ETI_SPEC_INST_LAYOUTS(SCALAR, LAYOUT, LAYOUT, EXEC_SPACE, MEM_SPACE)
+#define KOKKOSBLAS3_TRMM_ETI_SPEC_INST(SCALAR, LAYOUT, EXEC_SPACE) \
+  KOKKOSBLAS3_TRMM_ETI_SPEC_INST_LAYOUTS(SCALAR, LAYOUT, EXEC_SPACE)
 
 #include <KokkosBlas3_trmm_tpl_spec_decl.hpp>
 
