@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_OPENACC_MDRANGE_POLICY_HPP_
 #define KOKKOS_OPENACC_MDRANGE_POLICY_HPP_
@@ -49,11 +36,12 @@ struct OpenACCTile {};
 using OpenACCIterateLeft  = std::integral_constant<Iterate, Iterate::Left>;
 using OpenACCIterateRight = std::integral_constant<Iterate, Iterate::Right>;
 template <int N>
-using OpenACCMDRangeBegin = decltype(MDRangePolicy<OpenACC, Rank<N>>::m_lower);
+using OpenACCMDRangeBegin =
+    typename MDRangePolicy<OpenACC, Rank<N>>::point_type;
 template <int N>
-using OpenACCMDRangeEnd = decltype(MDRangePolicy<OpenACC, Rank<N>>::m_upper);
+using OpenACCMDRangeEnd = typename MDRangePolicy<OpenACC, Rank<N>>::point_type;
 template <int N>
-using OpenACCMDRangeTile = decltype(MDRangePolicy<OpenACC, Rank<N>>::m_tile);
+using OpenACCMDRangeTile = typename MDRangePolicy<OpenACC, Rank<N>>::tile_type;
 
 }  // namespace Kokkos::Experimental::Impl
 

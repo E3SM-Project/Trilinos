@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_HPX_WORKGRAPHPOLICY_HPP
 #define KOKKOS_HPX_WORKGRAPHPOLICY_HPP
@@ -52,10 +39,16 @@ class ParallelFor<FunctorType, Kokkos::WorkGraphPolicy<Traits...>,
   }
 
   void execute() const {
-    const int num_worker_threads = Kokkos::Experimental::HPX().concurrency();
-    Kokkos::Experimental::HPX().impl_bulk_plain(
-        true, is_light_weight_policy<Policy>(), *this, num_worker_threads,
-        hpx::threads::thread_stacksize::nostack);
+    const int num_worker_threads = m_policy.space().concurrency();
+    // FIXME_HPX Investigate if the execution space instance should be taken
+    // from the policy and if the fence is really needed.
+    const Kokkos::Experimental::HPX exec{};
+    exec.impl_bulk_plain(is_light_weight_policy<Policy>(), *this,
+                         num_worker_threads,
+                         hpx::threads::thread_stacksize::nostack);
+#if defined(KOKKOS_ENABLE_IMPL_HPX_ASYNC_DISPATCH)
+    exec.impl_instance_fence_locked("forced synchronization in WorkGraph");
+#endif
   }
 
   inline ParallelFor(const FunctorType &arg_functor, const Policy &arg_policy)

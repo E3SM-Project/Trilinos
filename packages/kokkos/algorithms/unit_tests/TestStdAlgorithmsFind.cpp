@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #include <TestStdAlgorithmsCommon.hpp>
 #include <iterator>
@@ -154,6 +141,25 @@ TEST(std_algorithms_find_test, test) {
   run_all_scenarios<DynamicTag, double>();
   run_all_scenarios<StridedTwoTag, int>();
   run_all_scenarios<StridedThreeTag, unsigned>();
+}
+
+TEST(std_algorithms_find_test, test_extended_range) {
+#ifndef KOKKOS_ENABLE_LARGE_MEM_TESTS
+  GTEST_SKIP();
+  KOKKOS_IMPL_UNREACHABLE();
+#endif
+  std::size_t n = (std::size_t(1) << 31) + 1;
+  Kokkos::View<bool*> view("large_view", n);
+
+  const std::size_t idx = n - 1;
+  Kokkos::deep_copy(Kokkos::subview(view, idx), true);
+
+  auto result = KE::find(exespace{}, view, true);
+  ASSERT_NE(result, KE::end(view));
+
+  bool found = false;
+  Kokkos::deep_copy(found, Kokkos::subview(view, result - KE::begin(view)));
+  EXPECT_EQ(found, true);
 }
 
 }  // namespace Find
