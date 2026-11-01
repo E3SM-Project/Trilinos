@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
+
+#ifndef KOKKOS_IMPL_KOKKOS_GRAPHNODECTORPROPS_HPP
+#define KOKKOS_IMPL_KOKKOS_GRAPHNODECTORPROPS_HPP
+
+#include "impl/Kokkos_DeviceHandle.hpp"
+#include "impl/Kokkos_Utilities.hpp"
+#include "View/Kokkos_ViewCtor.hpp"
+
+#include <tuple>
+
+namespace Kokkos::Impl {
+
+template <typename T>
+concept ValidNodeProperty = is_view_label_v<T> || is_device_handle_v<T>;
+
+// Transform a type into a valid property.
+template <typename T>
+struct NodeCtorPropTransform {
+  using type = T;
+};
+
+template <Kokkos::Impl::ViewLabel T>
+struct NodeCtorPropTransform<T> {
+  using type = std::string;
+};
+
+// A single property.
+template <ValidNodeProperty T>
+struct NodeCtorProp {
+  using value_type = typename NodeCtorPropTransform<T>::type;
+
+  explicit NodeCtorProp(value_type value) : m_value(std::move(value)) {}
+
+  value_type m_value;
+};
+
+// Aggregated properties.
+template <typename... Props>
+struct NodeCtorProps : public NodeCtorProp<Props>... {
+  using properties_value_type_list_t =
+      Kokkos::Impl::type_list<typename NodeCtorProp<Props>::value_type...>;
+
+  static_assert(Kokkos::Impl::type_list_size_v<Kokkos::Impl::filter_type_list_t<
+                        is_view_label, Kokkos::Impl::type_list<Props...>>> <= 1,
+                "Only one label allowed.");
+  static_assert(Kokkos::Impl::type_list_size_v<Kokkos::Impl::filter_type_list_t<
+                        is_device_handle, Kokkos::Impl::type_list<Props...>>> <=
+                    1,
+                "Only one device handle allowed.");
+
+  using uniform_type =
+      NodeCtorProps<typename NodeCtorProp<Props>::value_type...>;
+
+  template <typename T>
+  static constexpr bool has =
+      Kokkos::Impl::type_list_contains_v<T, properties_value_type_list_t>;
+
+  NodeCtorProps() = default;
+
+  // NOLINTBEGIN(modernize-type-traits)
+  template <typename... Args>
+    requires(std::constructible_from<NodeCtorProp<Props>, Args &&> && ...)
+  // NOLINTEND(modernize-type-traits)
+  explicit NodeCtorProps(Args&&... args)
+      : NodeCtorProp<Props>{std::forward<Args>(args)}... {}
+};
+
+template <typename T>
+struct is_node_props : public std::false_type {};
+
+template <typename... Args>
+struct is_node_props<NodeCtorProps<Args...>> : public std::true_type {};
+
+template <typename T>
+constexpr bool is_node_props_v = is_node_props<T>::value;
+
+template <typename T>
+concept NodeProperties = is_node_props_v<T>;
+
+template <ValidNodeProperty Prop, typename PropsContainer>
+  requires NodeProperties<std::remove_cvref_t<PropsContainer>>
+[[nodiscard]] constexpr decltype(auto) get_property(PropsContainer&& props) {
+  static_assert(std::remove_cvref_t<PropsContainer>::template has<Prop>);
+  using base_t = std::conditional_t<
+      std::is_const_v<std::remove_reference_t<PropsContainer>>,
+      const NodeCtorProp<Prop>, NodeCtorProp<Prop>>;
+  return Kokkos::Impl::forward_like<PropsContainer>(
+      static_cast<base_t&>(props).m_value);
+}
+
+template <ValidNodeProperty Prop, typename PropsContainer,
+          typename DefaultValueType>
+  requires NodeProperties<std::remove_cvref_t<PropsContainer>>
+[[nodiscard]] constexpr decltype(auto) get_property_or(
+    PropsContainer&& props, DefaultValueType&& default_value) {
+  if constexpr (std::remove_cvref_t<PropsContainer>::template has<Prop>) {
+    return get_property<Prop>(std::forward<PropsContainer>(props));
+  } else {
+    return std::forward<DefaultValueType>(default_value);
+  }
+}
+
+template <ValidNodeProperty... Props, typename PropsContainer,
+          typename... Defaults>
+  requires(NodeProperties<std::remove_cvref_t<PropsContainer>> &&
+           (std::convertible_to<Defaults, Props> && ...))
+[[nodiscard]] constexpr auto get_properties_or(PropsContainer&& props,
+                                               Defaults&&... defaults)
+    -> std::tuple<Props...> {
+  // NOLINTNEXTLINE(bugprone-use-after-move)
+  return {get_property_or<Props>(std::forward<PropsContainer>(props),
+                                 std::forward<Defaults>(defaults))...};
+}
+
+}  // namespace Kokkos::Impl
+
+namespace Kokkos::Experimental {
+template <typename... Args>
+[[nodiscard]] constexpr auto node_props(Args&&... args) {
+  using return_t = typename Kokkos::Impl::NodeCtorProps<
+      std::remove_cvref_t<Args>...>::uniform_type;
+  return return_t{std::forward<Args>(args)...};
+}
+
+}  // namespace Kokkos::Experimental
+
+#endif  // KOKKOS_IMPL_KOKKOS_GRAPHNODECTORPROPS_HPP

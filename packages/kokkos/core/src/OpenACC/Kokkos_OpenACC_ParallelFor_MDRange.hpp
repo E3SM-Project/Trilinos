@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_OPENACC_PARALLEL_FOR_MDRANGE_HPP
 #define KOKKOS_OPENACC_PARALLEL_FOR_MDRANGE_HPP
@@ -24,12 +11,28 @@
 
 namespace Kokkos::Experimental::Impl {
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateLeft,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<2> const& begin,
-                                     OpenACCMDRangeEnd<2> const& end,
-                                     int async_arg) {
+template <class Direction, class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCCollapse, Direction, Functor const& functor,
+    OpenACCMDRangeBegin<1, IndexType> const& begin,
+    OpenACCMDRangeEnd<1, IndexType> const& end, int async_arg) {
+  static_assert(Direction::value == Iterate::Left ||
+                Direction::value == Iterate::Right);
+  auto begin0 = begin[0];
+  auto end0   = end[0];
+// clang-format off
+#pragma acc parallel loop gang vector copyin(functor) async(async_arg)
+  // clang-format on
+  for (auto i0 = begin0; i0 < end0; ++i0) {
+    functor(i0);
+  }
+}
+
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCCollapse, OpenACCIterateLeft, Functor const& functor,
+    OpenACCMDRangeBegin<2, IndexType> const& begin,
+    OpenACCMDRangeEnd<2, IndexType> const& end, int async_arg) {
   auto begin1 = begin[1];
   auto end1   = end[1];
   auto begin0 = begin[0];
@@ -58,12 +61,11 @@ void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateLeft,
 #endif
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateRight,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<2> const& begin,
-                                     OpenACCMDRangeEnd<2> const& end,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCCollapse, OpenACCIterateRight, Functor const& functor,
+    OpenACCMDRangeBegin<2, IndexType> const& begin,
+    OpenACCMDRangeEnd<2, IndexType> const& end, int async_arg) {
   auto begin0 = begin[0];
   auto end0   = end[0];
   auto begin1 = begin[1];
@@ -92,13 +94,12 @@ void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateRight,
 #endif
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateLeft,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<2> const& begin,
-                                     OpenACCMDRangeEnd<2> const& end,
-                                     OpenACCMDRangeTile<2> const& tile,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCTile, OpenACCIterateLeft, Functor const& functor,
+    OpenACCMDRangeBegin<2, IndexType> const& begin,
+    OpenACCMDRangeEnd<2, IndexType> const& end,
+    OpenACCMDRangeTile<2, IndexType> const& tile, int async_arg) {
   auto tile0  = tile[0];
   auto tile1  = tile[1];
   auto begin1 = begin[1];
@@ -115,13 +116,12 @@ void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateLeft,
   }
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateRight,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<2> const& begin,
-                                     OpenACCMDRangeEnd<2> const& end,
-                                     OpenACCMDRangeTile<2> const& tile,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCTile, OpenACCIterateRight, Functor const& functor,
+    OpenACCMDRangeBegin<2, IndexType> const& begin,
+    OpenACCMDRangeEnd<2, IndexType> const& end,
+    OpenACCMDRangeTile<2, IndexType> const& tile, int async_arg) {
   auto tile1  = tile[1];
   auto tile0  = tile[0];
   auto begin0 = begin[0];
@@ -138,12 +138,11 @@ void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateRight,
   }
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateLeft,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<3> const& begin,
-                                     OpenACCMDRangeEnd<3> const& end,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCCollapse, OpenACCIterateLeft, Functor const& functor,
+    OpenACCMDRangeBegin<3, IndexType> const& begin,
+    OpenACCMDRangeEnd<3, IndexType> const& end, int async_arg) {
   auto begin2 = begin[2];
   auto end2   = end[2];
   auto begin1 = begin[1];
@@ -180,12 +179,11 @@ void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateLeft,
 #endif
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateRight,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<3> const& begin,
-                                     OpenACCMDRangeEnd<3> const& end,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCCollapse, OpenACCIterateRight, Functor const& functor,
+    OpenACCMDRangeBegin<3, IndexType> const& begin,
+    OpenACCMDRangeEnd<3, IndexType> const& end, int async_arg) {
   auto begin0 = begin[0];
   auto end0   = end[0];
   auto begin1 = begin[1];
@@ -222,13 +220,12 @@ void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateRight,
 #endif
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateLeft,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<3> const& begin,
-                                     OpenACCMDRangeEnd<3> const& end,
-                                     OpenACCMDRangeTile<3> const& tile,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCTile, OpenACCIterateLeft, Functor const& functor,
+    OpenACCMDRangeBegin<3, IndexType> const& begin,
+    OpenACCMDRangeEnd<3, IndexType> const& end,
+    OpenACCMDRangeTile<3, IndexType> const& tile, int async_arg) {
   auto tile0  = tile[0];
   auto tile1  = tile[1];
   auto tile2  = tile[2];
@@ -250,13 +247,12 @@ void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateLeft,
   }
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateRight,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<3> const& begin,
-                                     OpenACCMDRangeEnd<3> const& end,
-                                     OpenACCMDRangeTile<3> const& tile,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCTile, OpenACCIterateRight, Functor const& functor,
+    OpenACCMDRangeBegin<3, IndexType> const& begin,
+    OpenACCMDRangeEnd<3, IndexType> const& end,
+    OpenACCMDRangeTile<3, IndexType> const& tile, int async_arg) {
   auto tile2  = tile[2];
   auto tile1  = tile[1];
   auto tile0  = tile[0];
@@ -278,12 +274,11 @@ void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateRight,
   }
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateLeft,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<4> const& begin,
-                                     OpenACCMDRangeEnd<4> const& end,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCCollapse, OpenACCIterateLeft, Functor const& functor,
+    OpenACCMDRangeBegin<4, IndexType> const& begin,
+    OpenACCMDRangeEnd<4, IndexType> const& end, int async_arg) {
   auto begin3 = begin[3];
   auto end3   = end[3];
   auto begin2 = begin[2];
@@ -328,12 +323,11 @@ void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateLeft,
 #endif
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateRight,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<4> const& begin,
-                                     OpenACCMDRangeEnd<4> const& end,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCCollapse, OpenACCIterateRight, Functor const& functor,
+    OpenACCMDRangeBegin<4, IndexType> const& begin,
+    OpenACCMDRangeEnd<4, IndexType> const& end, int async_arg) {
   auto begin0 = begin[0];
   auto end0   = end[0];
   auto begin1 = begin[1];
@@ -378,13 +372,12 @@ void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateRight,
 #endif
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateLeft,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<4> const& begin,
-                                     OpenACCMDRangeEnd<4> const& end,
-                                     OpenACCMDRangeTile<4> const& tile,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCTile, OpenACCIterateLeft, Functor const& functor,
+    OpenACCMDRangeBegin<4, IndexType> const& begin,
+    OpenACCMDRangeEnd<4, IndexType> const& end,
+    OpenACCMDRangeTile<4, IndexType> const& tile, int async_arg) {
   auto tile0  = tile[0];
   auto tile1  = tile[1];
   auto tile2  = tile[2];
@@ -411,13 +404,12 @@ void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateLeft,
   }
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateRight,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<4> const& begin,
-                                     OpenACCMDRangeEnd<4> const& end,
-                                     OpenACCMDRangeTile<4> const& tile,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCTile, OpenACCIterateRight, Functor const& functor,
+    OpenACCMDRangeBegin<4, IndexType> const& begin,
+    OpenACCMDRangeEnd<4, IndexType> const& end,
+    OpenACCMDRangeTile<4, IndexType> const& tile, int async_arg) {
   auto tile3  = tile[3];
   auto tile2  = tile[2];
   auto tile1  = tile[1];
@@ -444,12 +436,11 @@ void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateRight,
   }
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateLeft,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<5> const& begin,
-                                     OpenACCMDRangeEnd<5> const& end,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCCollapse, OpenACCIterateLeft, Functor const& functor,
+    OpenACCMDRangeBegin<5, IndexType> const& begin,
+    OpenACCMDRangeEnd<5, IndexType> const& end, int async_arg) {
   auto begin4 = begin[4];
   auto end4   = end[4];
   auto begin3 = begin[3];
@@ -502,12 +493,11 @@ void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateLeft,
 #endif
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateRight,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<5> const& begin,
-                                     OpenACCMDRangeEnd<5> const& end,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCCollapse, OpenACCIterateRight, Functor const& functor,
+    OpenACCMDRangeBegin<5, IndexType> const& begin,
+    OpenACCMDRangeEnd<5, IndexType> const& end, int async_arg) {
   auto begin0 = begin[0];
   auto end0   = end[0];
   auto begin1 = begin[1];
@@ -560,13 +550,12 @@ void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateRight,
 #endif
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateLeft,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<5> const& begin,
-                                     OpenACCMDRangeEnd<5> const& end,
-                                     OpenACCMDRangeTile<5> const& tile,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCTile, OpenACCIterateLeft, Functor const& functor,
+    OpenACCMDRangeBegin<5, IndexType> const& begin,
+    OpenACCMDRangeEnd<5, IndexType> const& end,
+    OpenACCMDRangeTile<5, IndexType> const& tile, int async_arg) {
   auto tile0  = tile[0];
   auto tile1  = tile[1];
   auto tile2  = tile[2];
@@ -598,13 +587,12 @@ void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateLeft,
   }
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateRight,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<5> const& begin,
-                                     OpenACCMDRangeEnd<5> const& end,
-                                     OpenACCMDRangeTile<5> const& tile,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCTile, OpenACCIterateRight, Functor const& functor,
+    OpenACCMDRangeBegin<5, IndexType> const& begin,
+    OpenACCMDRangeEnd<5, IndexType> const& end,
+    OpenACCMDRangeTile<5, IndexType> const& tile, int async_arg) {
   auto tile4  = tile[4];
   auto tile3  = tile[3];
   auto tile2  = tile[2];
@@ -636,12 +624,11 @@ void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateRight,
   }
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateLeft,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<6> const& begin,
-                                     OpenACCMDRangeEnd<6> const& end,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCCollapse, OpenACCIterateLeft, Functor const& functor,
+    OpenACCMDRangeBegin<6, IndexType> const& begin,
+    OpenACCMDRangeEnd<6, IndexType> const& end, int async_arg) {
   auto begin5 = begin[5];
   auto end5   = end[5];
   auto begin4 = begin[4];
@@ -702,12 +689,11 @@ void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateLeft,
 #endif
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateRight,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<6> const& begin,
-                                     OpenACCMDRangeEnd<6> const& end,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCCollapse, OpenACCIterateRight, Functor const& functor,
+    OpenACCMDRangeBegin<6, IndexType> const& begin,
+    OpenACCMDRangeEnd<6, IndexType> const& end, int async_arg) {
   auto begin0 = begin[0];
   auto end0   = end[0];
   auto begin1 = begin[1];
@@ -768,13 +754,12 @@ void OpenACCParallelForMDRangePolicy(OpenACCCollapse, OpenACCIterateRight,
 #endif
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateLeft,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<6> const& begin,
-                                     OpenACCMDRangeEnd<6> const& end,
-                                     OpenACCMDRangeTile<6> const& tile,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCTile, OpenACCIterateLeft, Functor const& functor,
+    OpenACCMDRangeBegin<6, IndexType> const& begin,
+    OpenACCMDRangeEnd<6, IndexType> const& end,
+    OpenACCMDRangeTile<6, IndexType> const& tile, int async_arg) {
   auto tile0  = tile[0];
   auto tile1  = tile[1];
   auto tile2  = tile[2];
@@ -811,13 +796,12 @@ void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateLeft,
   }
 }
 
-template <class Functor>
-void OpenACCParallelForMDRangePolicy(OpenACCTile, OpenACCIterateRight,
-                                     Functor const& functor,
-                                     OpenACCMDRangeBegin<6> const& begin,
-                                     OpenACCMDRangeEnd<6> const& end,
-                                     OpenACCMDRangeTile<6> const& tile,
-                                     int async_arg) {
+template <class Functor, class IndexType>
+void OpenACCParallelForMDRangePolicy(
+    OpenACCTile, OpenACCIterateRight, Functor const& functor,
+    OpenACCMDRangeBegin<6, IndexType> const& begin,
+    OpenACCMDRangeEnd<6, IndexType> const& end,
+    OpenACCMDRangeTile<6, IndexType> const& tile, int async_arg) {
   auto tile5  = tile[5];
   auto tile4  = tile[4];
   auto tile3  = tile[3];
@@ -869,36 +853,45 @@ class Kokkos::Impl::ParallelFor<Functor, Kokkos::MDRangePolicy<Traits...>,
   ParallelFor(Functor const& functor, Policy const& policy)
       : m_functor(functor), m_policy(policy) {}
 
+  static int max_tile_size_product(const Policy&, const Functor&) {
+    return 512;
+  }
+
   void execute() const {
-    static_assert(1 < Policy::rank && Policy::rank < 7);
+    static_assert(0 < Policy::rank && Policy::rank < 7);
     static_assert(Policy::inner_direction == Iterate::Left ||
                   Policy::inner_direction == Iterate::Right);
     constexpr int rank = Policy::rank;
+
+    const auto lower_bound = m_policy.lower();
+    const auto upper_bound = m_policy.upper();
+
     for (int i = 0; i < rank; ++i) {
-      if (m_policy.m_lower[i] >= m_policy.m_upper[i]) {
+      if (lower_bound[i] >= upper_bound[i]) {
         return;
       }
     }
     int const async_arg = m_policy.space().acc_async_queue();
 #if 0  // FIXME_OPENACC: OpenACC requires tile size to be constant.
+    const auto tile_size = m_policy.tile_size();
     for (int i = 0; i < rank; ++i) {
-      if (m_policy.m_tile[i] < 1) {
+      if (tile_size[i] < 1) {
         Kokkos::Experimental::Impl::OpenACCParallelForMDRangePolicy(
             Kokkos::Experimental::Impl::OpenACCCollapse(),
             std::integral_constant<Iterate, Policy::inner_direction>(),
-            m_functor, m_policy.m_lower, m_policy.m_upper, async_arg);
+            m_functor, lower_bound, upper_bound, async_arg);
         return;
       }
     }
     Kokkos::Experimental::Impl::OpenACCParallelForMDRangePolicy(
         Kokkos::Experimental::Impl::OpenACCTile(),
         std::integral_constant<Iterate, Policy::inner_direction>(), m_functor,
-        m_policy.m_lower, m_policy.m_upper, m_policy.m_tile, async_arg);
+        lower_bound, upper_bound, tile_size, async_arg);
 #else
     Kokkos::Experimental::Impl::OpenACCParallelForMDRangePolicy(
         Kokkos::Experimental::Impl::OpenACCCollapse(),
         std::integral_constant<Iterate, Policy::inner_direction>(), m_functor,
-        m_policy.m_lower, m_policy.m_upper, async_arg);
+        lower_bound, upper_bound, async_arg);
 #endif
   }
 };

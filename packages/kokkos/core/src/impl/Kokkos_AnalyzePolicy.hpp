@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_IMPL_ANALYZE_POLICY_HPP
 #define KOKKOS_IMPL_ANALYZE_POLICY_HPP
@@ -21,12 +8,16 @@
 #include <Kokkos_Concepts.hpp>  // IndexType
 #include <traits/Kokkos_Traits_fwd.hpp>
 #include <traits/Kokkos_PolicyTraitAdaptor.hpp>
+#include <traits/Kokkos_PolicyTraitMatcher.hpp>
 
 #include <traits/Kokkos_ExecutionSpaceTrait.hpp>
+#include <traits/Kokkos_TeamHandleTrait.hpp>
+#include <traits/Kokkos_ThreadHandleTrait.hpp>
 #include <traits/Kokkos_GraphKernelTrait.hpp>
 #include <traits/Kokkos_IndexTypeTrait.hpp>
 #include <traits/Kokkos_IterationPatternTrait.hpp>
 #include <traits/Kokkos_LaunchBoundsTrait.hpp>
+#include <traits/Kokkos_StaticBatchSizeTrait.hpp>
 #include <traits/Kokkos_OccupancyControlTrait.hpp>
 #include <traits/Kokkos_ScheduleTrait.hpp>
 #include <traits/Kokkos_WorkItemPropertyTrait.hpp>
@@ -160,19 +151,73 @@ struct AnalyzeExecPolicyUseMatcher<void, type_list<>>
 // </editor-fold> end AnalyzeExecPolicyUseMatcher }}}1
 //==============================================================================
 
+// Helpers to choose the default execution space
+//   - If TeamHandleTrait exist, type is team_handle::execution_space
+//   - Else, type is Kokkos::DefaultExecutionSpace
+template <class T>
+struct DefaultExecutionSpaceSelector;
+
+template <>
+struct DefaultExecutionSpaceSelector<void> {
+  using type = Kokkos::DefaultExecutionSpace;
+};
+
+template <Kokkos::TeamHandle T>
+struct DefaultExecutionSpaceSelector<T> {
+  using type = typename T::execution_space;
+};
+
+template <Kokkos::Experimental::ThreadHandle T>
+struct DefaultExecutionSpaceSelector<T> {
+  using type = typename T::execution_space;
+};
+
+// Helper to get the primary handle type for execution space/type deduction
+template <class AnalysisResults>
+struct HandleSelector {
+  using type = std::conditional_t<
+      !AnalysisResults::thread_handle_is_not_set,
+      typename AnalysisResults::thread_handle,
+      std::conditional_t<!AnalysisResults::team_handle_is_not_set,
+                         typename AnalysisResults::team_handle, void>>;
+};
+
 //------------------------------------------------------------------------------
 // Used for defaults that depend on other analysis results
 template <class AnalysisResults>
 struct ExecPolicyTraitsWithDefaults : AnalysisResults {
   using base_t = AnalysisResults;
   using base_t::base_t;
+
+  using handle = typename HandleSelector<base_t>::type;
+
+  // At most one of ExecSpace, TeamHandle, or ThreadHandle may be specified
+  static_assert(
+      (base_t::execution_space_is_not_set || base_t::team_handle_is_not_set) &&
+          (base_t::execution_space_is_not_set ||
+           base_t::thread_handle_is_not_set) &&
+          (base_t::team_handle_is_not_set || base_t::thread_handle_is_not_set),
+      "Kokkos Error: Cannot give more than one policy trait (ExecSpace, "
+      "TeamHandle, or ThreadHandle).");
+
+  // Query for the default execution space
+  using execution_space = typename std::conditional_t<
+      base_t::execution_space_is_not_set,
+      typename DefaultExecutionSpaceSelector<handle>::type,
+      typename base_t::execution_space>;
+
+  // Define the "execution_type" to be whichever policy trait was explicitly set
+  // (default to execspace if no handle is set)
+  using execution_type =
+      std::conditional_t<std::is_void_v<handle>, execution_space, handle>;
+
   // The old code turned this into an integral type for backwards compatibility,
   // so that's what we're doing here. The original comment was:
   //   nasty hack to make index_type into an integral_type
   //   instead of the wrapped IndexType<T> for backwards compatibility
   using index_type = typename std::conditional_t<
       base_t::index_type_is_defaulted,
-      Kokkos::IndexType<typename base_t::execution_space::size_type>,
+      Kokkos::IndexType<typename execution_space::index_type>,
       typename base_t::index_type>::type;
 };
 
