@@ -9,7 +9,7 @@
 
 /** \file
     \brief  Contains definitions for the equality constrained NLP
-            from Nocedal/Wright, 2nd edition, page 574, example 18.2;
+            from Nocedal/Wright, 2nd edition, page 562, exercise 18.3;
             note the typo in reversing the initial guess and the solution.
     \author Created by D. Ridzal and D. Kouri.
  */
@@ -19,14 +19,13 @@
 
 #include "ROL_TestProblem.hpp"
 #include "ROL_StdVector.hpp"
-#include "Teuchos_SerialDenseVector.hpp"
-#include "Teuchos_SerialDenseSolver.hpp"
+#include "ROL_LinearAlgebra.hpp"
 
 namespace ROL {
 namespace ZOO {
 
   /** \brief Objective function:
-             f(x) = exp(x1*x2*x3*x4*x5) + 0.5*(x1^3+x2^3+1)^2
+             f(x) = exp(x1*x2*x3*x4*x5) - 0.5*(x1^3+x2^3+1)^2
    */
   template< class Real, class XPrim=StdVector<Real>, class XDual=StdVector<Real> >
   class Objective_SimpleEqConstrained : public Objective<Real> {

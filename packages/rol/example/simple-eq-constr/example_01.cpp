@@ -9,7 +9,7 @@
 
 /*! \file  example_01.cpp
     \brief Shows how to solve the equality constrained NLP
-           from Nocedal/Wright, 2nd edition, page 574, example 18.2.
+           from Nocedal/Wright, 2nd edition, page 562, exercise 18.3.
 */
 
 #include "ROL_SimpleEqConstrained.hpp"
@@ -18,7 +18,7 @@
 #include "ROL_CompositeStep.hpp"
 #include "ROL_ConstraintStatusTest.hpp"
 #include "ROL_Stream.hpp"
-#include "Teuchos_GlobalMPISession.hpp"
+#include "ROL_GlobalMPISession.hpp"
 
 #include <iostream>
 
@@ -27,7 +27,7 @@ typedef double RealT;
 
 int main(int argc, char *argv[]) {
 
-  Teuchos::GlobalMPISession mpiSession(&argc, &argv);
+  ROL::GlobalMPISession mpiSession(&argc, &argv);
 
   // This little trick lets us print to std::cout only if a (dummy) command-line argument is provided.
   int iprint     = argc - 1;

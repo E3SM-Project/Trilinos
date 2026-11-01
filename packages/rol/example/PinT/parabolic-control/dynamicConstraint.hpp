@@ -25,7 +25,7 @@
 #include "ROL_ParameterList.hpp"
 #include "ROL_StdVector.hpp"
 #include "ROL_DynamicConstraint.hpp"
-#include "Teuchos_LAPACK.hpp"
+#include "ROL_LAPACK.hpp"
 
 template<class Real>
 class Constraint_ParabolicControl : public ROL::DynamicConstraint<Real> {
@@ -289,7 +289,7 @@ private:
     return std::sqrt(norm);
   }
 
-  void update(std::vector<Real> &u, const std::vector<Real> &s, const Real alpha=1.0) const {
+  void updateVector(std::vector<Real> &u, const std::vector<Real> &s, const Real alpha=1.0) const {
     for (uint i = 0; i < u.size(); i++) {
       u[i] += alpha*s[i];
     }
@@ -299,7 +299,7 @@ private:
               const std::vector<Real> &r) const {
     u.assign(r.begin(),r.end());
     // Perform LDL factorization
-    Teuchos::LAPACK<int,Real> lp;
+    ROL::LAPACK<int,Real> lp;
     int nx = static_cast<int>(nx_);
     int info;
     int ldb  = nx;
@@ -336,13 +336,13 @@ private:
       tmp = rnorm;
       alpha = one;
       utmp.assign(u.begin(),u.end());
-      update(utmp,s,-alpha);
+      updateVector(utmp,s,-alpha);
       compute_residual(r,up,utmp,z);
       rnorm = compute_norm(r); 
       while ( rnorm > (one-lstol*alpha)*tmp && alpha > std::sqrt(ROL::ROL_EPSILON<Real>()) ) {
         alpha *= half;
         utmp.assign(u.begin(),u.end());
-        update(utmp,s,-alpha);
+        updateVector(utmp,s,-alpha);
         compute_residual(r,up,utmp,z);
         rnorm = compute_norm(r); 
       }
