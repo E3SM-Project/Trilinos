@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #include <gtest/gtest.h>
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Random.hpp>
@@ -23,11 +10,11 @@ namespace Test {
 template <class ViewTypeA, class Device>
 void impl_test_nrm2w_squared(int N) {
   using ScalarA    = typename ViewTypeA::value_type;
-  using AT         = Kokkos::ArithTraits<ScalarA>;
+  using AT         = KokkosKernels::ArithTraits<ScalarA>;
   using MagnitudeA = typename AT::mag_type;
 
-  view_stride_adapter<ViewTypeA> a("A", N);
-  view_stride_adapter<ViewTypeA> w("W", N);
+  TestUtils::view_stride_adapter<ViewTypeA> a("A", N);
+  TestUtils::view_stride_adapter<ViewTypeA> w("W", N);
 
   constexpr MagnitudeA max_val = 10;
   const MagnitudeA eps         = AT::epsilon();
@@ -36,7 +23,7 @@ void impl_test_nrm2w_squared(int N) {
   Kokkos::Random_XorShift64_Pool<typename Device::execution_space> rand_pool(13718);
 
   ScalarA randStart, randEnd;
-  Test::getRandomBounds(max_val, randStart, randEnd);
+  TestUtils::getRandomBounds(max_val, randStart, randEnd);
   Kokkos::fill_random(a.d_view, rand_pool, randStart, randEnd);
   Kokkos::fill_random(w.d_view, rand_pool, AT::one(),
                       randEnd);  // Avoid divide by 0
@@ -57,11 +44,11 @@ void impl_test_nrm2w_squared(int N) {
 template <class ViewTypeA, class Device>
 void impl_test_nrm2w_squared_mv(int N, int K) {
   using ScalarA    = typename ViewTypeA::value_type;
-  using AT         = Kokkos::ArithTraits<ScalarA>;
+  using AT         = KokkosKernels::ArithTraits<ScalarA>;
   using MagnitudeA = typename AT::mag_type;
 
-  view_stride_adapter<ViewTypeA> a("A", N, K);
-  view_stride_adapter<ViewTypeA> w("W", N, K);
+  TestUtils::view_stride_adapter<ViewTypeA> a("A", N, K);
+  TestUtils::view_stride_adapter<ViewTypeA> w("W", N, K);
 
   constexpr MagnitudeA max_val = 10;
   const MagnitudeA eps         = AT::epsilon();
@@ -70,7 +57,7 @@ void impl_test_nrm2w_squared_mv(int N, int K) {
   Kokkos::Random_XorShift64_Pool<typename Device::execution_space> rand_pool(13718);
 
   ScalarA randStart, randEnd;
-  Test::getRandomBounds(max_val, randStart, randEnd);
+  TestUtils::getRandomBounds(max_val, randStart, randEnd);
   Kokkos::fill_random(a.d_view, rand_pool, randStart, randEnd);
   Kokkos::fill_random(w.d_view, rand_pool, AT::one(), randEnd);
 

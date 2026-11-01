@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #ifndef KOKKOSBLAS2_GEMV_HPP_
 #define KOKKOSBLAS2_GEMV_HPP_
 
@@ -98,17 +85,18 @@ void gemv(const ExecutionSpace& space, const char trans[], typename AViewType::c
   // Minimize the number of Impl::GEMV instantiations, by
   // standardizing on particular View specializations for its template
   // parameters.
-  typedef Kokkos::View<typename AViewType::const_value_type**, ALayout, typename AViewType::device_type,
-                       Kokkos::MemoryTraits<Kokkos::Unmanaged> >
-      AVT;
-  typedef Kokkos::View<typename XViewType::const_value_type*,
-                       typename KokkosKernels::Impl::GetUnifiedLayoutPreferring<XViewType, ALayout>::array_layout,
-                       typename XViewType::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged> >
-      XVT;
-  typedef Kokkos::View<typename YViewType::non_const_value_type*,
-                       typename KokkosKernels::Impl::GetUnifiedLayoutPreferring<YViewType, ALayout>::array_layout,
-                       typename YViewType::device_type, Kokkos::MemoryTraits<Kokkos::Unmanaged> >
-      YVT;
+  using AVT = Kokkos::View<typename AViewType::const_value_type**, ALayout, ExecutionSpace,
+                           Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+  using XVT = Kokkos::View<typename XViewType::const_value_type*,
+                           typename KokkosKernels::Impl::GetUnifiedLayoutPreferring<XViewType, ALayout>::array_layout,
+                           ExecutionSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+  using YVT = Kokkos::View<typename YViewType::non_const_value_type*,
+                           typename KokkosKernels::Impl::GetUnifiedLayoutPreferring<YViewType, ALayout>::array_layout,
+                           ExecutionSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+
+  AVT A_internal = KokkosKernels::Impl::unificationCast<AVT>(A);
+  XVT x_internal = KokkosKernels::Impl::unificationCast<XVT>(x);
+  YVT y_internal = KokkosKernels::Impl::unificationCast<YVT>(y);
 
   // Degenerate case is essentially same as scal - use fallback impl
   // to avoid potential (unlikely?) circular dependence issues by including
@@ -135,18 +123,17 @@ void gemv(const ExecutionSpace& space, const char trans[], typename AViewType::c
 #ifdef KOKKOS_ENABLE_SYCL
   // oneMKL supports both row-major and column-major of A
   // but only supports oneapi::mkl::transpose::nontrans op
-  useFallback =
-      useFallback || !std::is_same_v<typename AViewType::memory_space, Kokkos::Experimental::SYCLDeviceUSMSpace>;
+  useFallback = useFallback || !std::is_same_v<typename AViewType::memory_space, Kokkos::SYCLDeviceUSMSpace>;
 #endif
 #endif
 
   if (useFallback) {
     const bool eti_spec_avail = KokkosBlas::Impl::gemv_eti_spec_avail<ExecutionSpace, AVT, XVT, YVT>::value;
-    typedef Impl::GEMV<ExecutionSpace, AVT, XVT, YVT, false, eti_spec_avail> fallback_impl_type;
-    fallback_impl_type::gemv(space, trans, alpha, A, x, beta, y);
+    using fallback_impl_type  = Impl::GEMV<ExecutionSpace, AVT, XVT, YVT, false, eti_spec_avail>;
+    fallback_impl_type::gemv(space, trans, alpha, A_internal, x_internal, beta, y_internal);
   } else {
-    typedef Impl::GEMV<ExecutionSpace, AVT, XVT, YVT> impl_type;
-    impl_type::gemv(space, trans, alpha, A, x, beta, y);
+    using impl_type = Impl::GEMV<ExecutionSpace, AVT, XVT, YVT>;
+    impl_type::gemv(space, trans, alpha, A_internal, x_internal, beta, y_internal);
   }
 }
 

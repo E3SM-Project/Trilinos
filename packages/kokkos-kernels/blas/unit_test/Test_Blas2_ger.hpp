@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 // **********************************************************************
 // The tests executed by the code below cover many combinations for
@@ -64,102 +51,102 @@ class GerTester {
             const bool useHermitianOption = false);
 
  private:
-  using _ViewTypeX = Kokkos::View<ScalarX*, tLayoutX, Device>;
-  using _ViewTypeY = Kokkos::View<ScalarY*, tLayoutY, Device>;
-  using _ViewTypeA = Kokkos::View<ScalarA**, tLayoutA, Device>;
+  using ViewTypeX = Kokkos::View<ScalarX*, tLayoutX, Device>;
+  using ViewTypeY = Kokkos::View<ScalarY*, tLayoutY, Device>;
+  using ViewTypeA = Kokkos::View<ScalarA**, tLayoutA, Device>;
 
-  using _HostViewTypeX    = typename _ViewTypeX::HostMirror;
-  using _HostViewTypeY    = typename _ViewTypeY::HostMirror;
-  using _HostViewTypeA    = typename _ViewTypeA::HostMirror;
-  using _ViewTypeExpected = Kokkos::View<ScalarA**, tLayoutA, Kokkos::HostSpace>;
+  using HostViewTypeX    = typename ViewTypeX::host_mirror_type;
+  using HostViewTypeY    = typename ViewTypeY::host_mirror_type;
+  using HostViewTypeA    = typename ViewTypeA::host_mirror_type;
+  using ViewTypeExpected = Kokkos::View<ScalarA**, tLayoutA, Kokkos::HostSpace>;
 
-  using _KAT_A   = Kokkos::ArithTraits<ScalarA>;
-  using _AuxType = typename _KAT_A::mag_type;
+  using KAT_A   = KokkosKernels::ArithTraits<ScalarA>;
+  using AuxType = typename KAT_A::mag_type;
 
-  void populateVariables(ScalarA& alpha, view_stride_adapter<_ViewTypeX, false>& x,
-                         view_stride_adapter<_ViewTypeY, false>& y, view_stride_adapter<_ViewTypeA, false>& A,
-                         _ViewTypeExpected& h_expected, bool& expectedResultIsKnown);
-
-  template <class T>
-  typename std::enable_if<
-      std::is_same<T, Kokkos::complex<float>>::value || std::is_same<T, Kokkos::complex<double>>::value, void>::type
-  populateAnalyticalValues(T& alpha, _HostViewTypeX& h_x, _HostViewTypeY& h_y, _HostViewTypeA& h_A,
-                           _ViewTypeExpected& h_expected);
-
-  template <class T>
-  typename std::enable_if<
-      !std::is_same<T, Kokkos::complex<float>>::value && !std::is_same<T, Kokkos::complex<double>>::value, void>::type
-  populateAnalyticalValues(T& alpha, _HostViewTypeX& h_x, _HostViewTypeY& h_y, _HostViewTypeA& h_A,
-                           _ViewTypeExpected& h_expected);
+  void populateVariables(ScalarA& alpha, TestUtils::view_stride_adapter<ViewTypeX, false>& x,
+                         TestUtils::view_stride_adapter<ViewTypeY, false>& y,
+                         TestUtils::view_stride_adapter<ViewTypeA, false>& A, ViewTypeExpected& h_expected,
+                         bool& expectedResultIsKnown);
 
   template <class T>
   typename std::enable_if<
       std::is_same<T, Kokkos::complex<float>>::value || std::is_same<T, Kokkos::complex<double>>::value, void>::type
-  populateVanillaValues(const T& alpha, const _HostViewTypeX& h_x, const _HostViewTypeY& h_y, const _HostViewTypeA& h_A,
-                        _ViewTypeExpected& h_vanilla);
+  populateAnalyticalValues(T& alpha, HostViewTypeX& h_x, HostViewTypeY& h_y, HostViewTypeA& h_A,
+                           ViewTypeExpected& h_expected);
 
   template <class T>
   typename std::enable_if<
       !std::is_same<T, Kokkos::complex<float>>::value && !std::is_same<T, Kokkos::complex<double>>::value, void>::type
-  populateVanillaValues(const T& alpha, const _HostViewTypeX& h_x, const _HostViewTypeY& h_y, const _HostViewTypeA& h_A,
-                        _ViewTypeExpected& h_vanilla);
+  populateAnalyticalValues(T& alpha, HostViewTypeX& h_x, HostViewTypeY& h_y, HostViewTypeA& h_A,
+                           ViewTypeExpected& h_expected);
 
   template <class T>
   typename std::enable_if<
       std::is_same<T, Kokkos::complex<float>>::value || std::is_same<T, Kokkos::complex<double>>::value, void>::type
-  compareVanillaAgainstExpected(const T& alpha, const _ViewTypeExpected& h_vanilla,
-                                const _ViewTypeExpected& h_expected);
+  populateVanillaValues(const T& alpha, const HostViewTypeX& h_x, const HostViewTypeY& h_y, const HostViewTypeA& h_A,
+                        ViewTypeExpected& h_vanilla);
 
   template <class T>
   typename std::enable_if<
       !std::is_same<T, Kokkos::complex<float>>::value && !std::is_same<T, Kokkos::complex<double>>::value, void>::type
-  compareVanillaAgainstExpected(const T& alpha, const _ViewTypeExpected& h_vanilla,
-                                const _ViewTypeExpected& h_expected);
+  populateVanillaValues(const T& alpha, const HostViewTypeX& h_x, const HostViewTypeY& h_y, const HostViewTypeA& h_A,
+                        ViewTypeExpected& h_vanilla);
 
   template <class T>
   typename std::enable_if<
       std::is_same<T, Kokkos::complex<float>>::value || std::is_same<T, Kokkos::complex<double>>::value, void>::type
-  compareKkGerAgainstExpected(const T& alpha, const _HostViewTypeA& h_A, const _ViewTypeExpected& h_expected);
+  compareVanillaAgainstExpected(const T& alpha, const ViewTypeExpected& h_vanilla, const ViewTypeExpected& h_expected);
 
   template <class T>
   typename std::enable_if<
       !std::is_same<T, Kokkos::complex<float>>::value && !std::is_same<T, Kokkos::complex<double>>::value, void>::type
-  compareKkGerAgainstExpected(const T& alpha, const _HostViewTypeA& h_A, const _ViewTypeExpected& h_expected);
+  compareVanillaAgainstExpected(const T& alpha, const ViewTypeExpected& h_vanilla, const ViewTypeExpected& h_expected);
+
+  template <class T>
+  typename std::enable_if<
+      std::is_same<T, Kokkos::complex<float>>::value || std::is_same<T, Kokkos::complex<double>>::value, void>::type
+  compareKkGerAgainstExpected(const T& alpha, const HostViewTypeA& h_A, const ViewTypeExpected& h_expected);
+
+  template <class T>
+  typename std::enable_if<
+      !std::is_same<T, Kokkos::complex<float>>::value && !std::is_same<T, Kokkos::complex<double>>::value, void>::type
+  compareKkGerAgainstExpected(const T& alpha, const HostViewTypeA& h_A, const ViewTypeExpected& h_expected);
 
   template <class T>
   T shrinkAngleToZeroTwoPiRange(const T input);
 
   template <class TX, class TY>
-  void callKkGerAndCompareAgainstExpected(const ScalarA& alpha, TX& x, TY& y, view_stride_adapter<_ViewTypeA, false>& A,
-                                          const _ViewTypeExpected& h_expected, const std::string& situation);
+  void callKkGerAndCompareAgainstExpected(const ScalarA& alpha, TX& x, TY& y,
+                                          TestUtils::view_stride_adapter<ViewTypeA, false>& A,
+                                          const ViewTypeExpected& h_expected, const std::string& situation);
 
-  const bool _A_is_complex;
-  const bool _A_is_lr;
-  const bool _A_is_ll;
-  const bool _testIsGpu;
-  const bool _vanillaUsesDifferentOrderOfOps;
-  const _AuxType _absTol;
-  const _AuxType _relTol;
-  int _M;
-  int _N;
-  bool _useAnalyticalResults;
-  bool _useHermitianOption;
-  bool _kkGerShouldThrowException;
+  const bool m_A_is_complex;
+  const bool m_A_is_lr;
+  const bool m_A_is_ll;
+  const bool m_testIsGpu;
+  const bool m_vanillaUsesDifferentOrderOfOps;
+  const AuxType m_absTol;
+  const AuxType m_relTol;
+  int m_M;
+  int m_N;
+  bool m_useAnalyticalResults;
+  bool m_useHermitianOption;
+  bool m_kkGerShouldThrowException;
 };
 
 template <class ScalarX, class tLayoutX, class ScalarY, class tLayoutY, class ScalarA, class tLayoutA, class Device>
 GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::GerTester()
-    : _A_is_complex(std::is_same<ScalarA, Kokkos::complex<float>>::value ||
-                    std::is_same<ScalarA, Kokkos::complex<double>>::value),
-      _A_is_lr(std::is_same<tLayoutA, Kokkos::LayoutRight>::value),
-      _A_is_ll(std::is_same<tLayoutA, Kokkos::LayoutLeft>::value),
-      _testIsGpu(KokkosKernels::Impl::is_gpu_exec_space_v<typename Device::execution_space>)
+    : m_A_is_complex(std::is_same<ScalarA, Kokkos::complex<float>>::value ||
+                     std::is_same<ScalarA, Kokkos::complex<double>>::value),
+      m_A_is_lr(std::is_same<tLayoutA, Kokkos::LayoutRight>::value),
+      m_A_is_ll(std::is_same<tLayoutA, Kokkos::LayoutLeft>::value),
+      m_testIsGpu(KokkosKernels::Impl::is_gpu_exec_space_v<typename Device::execution_space>)
 #ifdef KOKKOSKERNELS_ENABLE_TPL_BLAS
       ,
-      _vanillaUsesDifferentOrderOfOps(_A_is_lr && _testIsGpu)
+      m_vanillaUsesDifferentOrderOfOps(m_A_is_lr && m_testIsGpu)
 #else
       ,
-      _vanillaUsesDifferentOrderOfOps(false)
+      m_vanillaUsesDifferentOrderOfOps(false)
 #endif
       ,
       // ****************************************************************
@@ -170,13 +157,13 @@ GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::GerT
       // large enough to require 'relTol' to value 5.0e-3. The same
       // calculations show no discrepancies for calculations with double.
       // ****************************************************************
-      _absTol(std::is_same<_AuxType, float>::value ? 1.0e-6 : (std::is_same<_AuxType, double>::value ? 1.0e-9 : 0)),
-      _relTol(std::is_same<_AuxType, float>::value ? 5.0e-3 : (std::is_same<_AuxType, double>::value ? 1.0e-6 : 0)),
-      _M(-1),
-      _N(-1),
-      _useAnalyticalResults(false),
-      _useHermitianOption(false),
-      _kkGerShouldThrowException(false) {
+      m_absTol(std::is_same<AuxType, float>::value ? 1.0e-6 : (std::is_same<AuxType, double>::value ? 1.0e-9 : 0)),
+      m_relTol(std::is_same<AuxType, float>::value ? 5.0e-3 : (std::is_same<AuxType, double>::value ? 1.0e-6 : 0)),
+      m_M(-1),
+      m_N(-1),
+      m_useAnalyticalResults(false),
+      m_useHermitianOption(false),
+      m_kkGerShouldThrowException(false) {
 }
 
 template <class ScalarX, class tLayoutX, class ScalarY, class tLayoutY, class ScalarA, class tLayoutA, class Device>
@@ -188,35 +175,24 @@ template <class ScalarX, class tLayoutX, class ScalarY, class tLayoutY, class Sc
 void GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::test(
     const int M, const int N, const int nonConstConstCombinations, const bool useAnalyticalResults,
     const bool useHermitianOption) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
   std::cout << "Entering GerTester::test()... - - - - - - - - - - - - - - - - "
                "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - "
                "- - - - - - - - - "
             << std::endl;
 
-  std::cout << "_A_is_complex = " << _A_is_complex << ", _A_is_lr = " << _A_is_lr << ", _A_is_ll = " << _A_is_ll
-            << ", _testIsGpu = " << _testIsGpu
-            << ", _vanillaUsesDifferentOrderOfOps = " << _vanillaUsesDifferentOrderOfOps << ", _absTol = " << _absTol
-            << ", _relTol = " << _relTol << std::endl;
+  std::cout << "m_A_is_complex = " << m_A_is_complex << ", m_A_is_lr = " << m_A_is_lr << ", m_A_is_ll = " << m_A_is_ll
+            << ", m_testIsGpu = " << m_testIsGpu
+            << ", m_vanillaUsesDifferentOrderOfOps = " << m_vanillaUsesDifferentOrderOfOps
+            << ", m_absTol = " << m_absTol << ", m_relTol = " << m_relTol << std::endl;
 #endif
   // ********************************************************************
   // Step 1 of 9: declare main types and variables
   // ********************************************************************
-  _M                    = M;
-  _N                    = N;
-  _useAnalyticalResults = useAnalyticalResults;
-  _useHermitianOption   = useHermitianOption;
-
-#ifdef KOKKOSKERNELS_ENABLE_TPL_BLAS
-  _kkGerShouldThrowException = false;
-  if (_A_is_complex && _useHermitianOption) {
-    if ((_testIsGpu == false) && (_A_is_ll == false)) {
-      _kkGerShouldThrowException = true;
-    } else if ((_testIsGpu == true) && (_A_is_ll == false)) {
-      _kkGerShouldThrowException = true;
-    }
-  }
-#endif
+  m_M                    = M;
+  m_N                    = N;
+  m_useAnalyticalResults = useAnalyticalResults;
+  m_useHermitianOption   = useHermitianOption;
 
   bool test_x_y(false);
   bool test_cx_y(false);
@@ -237,11 +213,11 @@ void GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>:
     test_cx_cy = true;
   }
 
-  view_stride_adapter<_ViewTypeX, false> x("X", _M);
-  view_stride_adapter<_ViewTypeY, false> y("Y", _N);
-  view_stride_adapter<_ViewTypeA, false> A("A", _M, _N);
+  TestUtils::view_stride_adapter<ViewTypeX, false> x("X", m_M);
+  TestUtils::view_stride_adapter<ViewTypeY, false> y("Y", m_N);
+  TestUtils::view_stride_adapter<ViewTypeA, false> A("A", m_M, m_N);
 
-  view_stride_adapter<_ViewTypeExpected, true> h_expected("expected A += alpha * x * y^{t,h}", _M, _N);
+  TestUtils::view_stride_adapter<ViewTypeExpected, true> h_expected("expected A += alpha * x * y^{t,h}", m_M, m_N);
   bool expectedResultIsKnown = false;
 
   ScalarA alpha(0.);
@@ -254,8 +230,8 @@ void GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>:
   // ********************************************************************
   // Step 3 of 9: populate h_vanilla
   // ********************************************************************
-  view_stride_adapter<_ViewTypeExpected, true> h_vanilla("vanilla = A + alpha * x * y^{t,h}", _M, _N);
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+  TestUtils::view_stride_adapter<ViewTypeExpected, true> h_vanilla("vanilla = A + alpha * x * y^{t,h}", m_M, m_N);
+#ifndef NDEBUG
   Kokkos::printf("In Test_Blas2_ger.hpp, computing vanilla A with alpha type = %s\n", typeid(alpha).name());
 #endif
   this->populateVanillaValues(alpha, x.h_view, y.h_view, A.h_view, h_vanilla.d_view);
@@ -278,7 +254,7 @@ void GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>:
   // ********************************************************************
   // Step 5 of 9: test with 'non const x' and 'non const y'
   // ********************************************************************
-  view_stride_adapter<_ViewTypeA, false> org_A("Org_A", _M, _N);
+  TestUtils::view_stride_adapter<ViewTypeA, false> org_A("Org_A", m_M, m_N);
   Kokkos::deep_copy(org_A.d_base, A.d_base);
 
   if (test_x_y) {
@@ -321,7 +297,7 @@ void GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>:
   EXPECT_ANY_THROW(KokkosBlas::ger("", alpha, x.d_view, y.d_view, A.d_view))
       << "Failed test: kk ger should have thrown an exception for mode ''";
 
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
   std::cout << "Leaving GerTester::test() - - - - - - - - - - - - - - - - - - "
                "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - "
                "- - - - - - - "
@@ -331,18 +307,19 @@ void GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>:
 
 template <class ScalarX, class tLayoutX, class ScalarY, class tLayoutY, class ScalarA, class tLayoutA, class Device>
 void GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::populateVariables(
-    ScalarA& alpha, view_stride_adapter<_ViewTypeX, false>& x, view_stride_adapter<_ViewTypeY, false>& y,
-    view_stride_adapter<_ViewTypeA, false>& A, _ViewTypeExpected& h_expected, bool& expectedResultIsKnown) {
+    ScalarA& alpha, TestUtils::view_stride_adapter<ViewTypeX, false>& x,
+    TestUtils::view_stride_adapter<ViewTypeY, false>& y, TestUtils::view_stride_adapter<ViewTypeA, false>& A,
+    ViewTypeExpected& h_expected, bool& expectedResultIsKnown) {
   expectedResultIsKnown = false;
 
-  if (_useAnalyticalResults) {
+  if (m_useAnalyticalResults) {
     this->populateAnalyticalValues(alpha, x.h_view, y.h_view, A.h_view, h_expected);
     Kokkos::deep_copy(x.d_base, x.h_base);
     Kokkos::deep_copy(y.d_base, y.h_base);
     Kokkos::deep_copy(A.d_base, A.h_base);
 
     expectedResultIsKnown = true;
-  } else if ((_M == 1) && (_N == 1)) {
+  } else if ((m_M == 1) && (m_N == 1)) {
     alpha = 3;
 
     x.h_view[0] = 2;
@@ -357,7 +334,7 @@ void GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>:
 
     h_expected(0, 0)      = 25;
     expectedResultIsKnown = true;
-  } else if ((_M == 1) && (_N == 2)) {
+  } else if ((m_M == 1) && (m_N == 2)) {
     alpha = 3;
 
     x.h_view[0] = 2;
@@ -375,7 +352,7 @@ void GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>:
     h_expected(0, 0)      = 25;
     h_expected(0, 1)      = 18;
     expectedResultIsKnown = true;
-  } else if ((_M == 2) && (_N == 2)) {
+  } else if ((m_M == 2) && (m_N == 2)) {
     alpha = 3;
 
     x.h_view[0] = 2;
@@ -405,19 +382,19 @@ void GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>:
 
     {
       ScalarX randStart, randEnd;
-      Test::getRandomBounds(1.0, randStart, randEnd);
+      TestUtils::getRandomBounds(1.0, randStart, randEnd);
       Kokkos::fill_random(x.d_view, rand_pool, randStart, randEnd);
     }
 
     {
       ScalarY randStart, randEnd;
-      Test::getRandomBounds(1.0, randStart, randEnd);
+      TestUtils::getRandomBounds(1.0, randStart, randEnd);
       Kokkos::fill_random(y.d_view, rand_pool, randStart, randEnd);
     }
 
     {
       ScalarA randStart, randEnd;
-      Test::getRandomBounds(1.0, randStart, randEnd);
+      TestUtils::getRandomBounds(1.0, randStart, randEnd);
       Kokkos::fill_random(A.d_view, rand_pool, randStart, randEnd);
     }
 
@@ -433,65 +410,65 @@ template <class T>
 typename std::enable_if<
     std::is_same<T, Kokkos::complex<float>>::value || std::is_same<T, Kokkos::complex<double>>::value, void>::type
 GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::populateAnalyticalValues(
-    T& alpha, _HostViewTypeX& h_x, _HostViewTypeY& h_y, _HostViewTypeA& h_A, _ViewTypeExpected& h_expected) {
-  _AuxType auxI(0.);
-  _AuxType auxJ(0.);
-  _AuxType auxIpJ(0.);
-  _AuxType auxImJ(0.);
+    T& alpha, HostViewTypeX& h_x, HostViewTypeY& h_y, HostViewTypeA& h_A, ViewTypeExpected& h_expected) {
+  AuxType auxI(0.);
+  AuxType auxJ(0.);
+  AuxType auxIpJ(0.);
+  AuxType auxImJ(0.);
 
   alpha.real() = 1.;
   alpha.imag() = -1.;
 
-  for (int i = 0; i < _M; ++i) {
-    auxI          = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(i));
+  for (int i = 0; i < m_M; ++i) {
+    auxI          = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(i));
     h_x[i].real() = sin(auxI);
     h_x[i].imag() = cos(auxI);
   }
 
-  for (int j = 0; j < _N; ++j) {
-    auxJ          = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(j));
+  for (int j = 0; j < m_N; ++j) {
+    auxJ          = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(j));
     h_y[j].real() = cos(auxJ);
     h_y[j].imag() = sin(auxJ);
   }
 
-  if (_useHermitianOption) {
-    for (int i = 0; i < _M; ++i) {
-      auxI = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(i));
-      for (int j = 0; j < _N; ++j) {
-        auxJ             = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(j));
-        auxIpJ           = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(i + j));
+  if (m_useHermitianOption) {
+    for (int i = 0; i < m_M; ++i) {
+      auxI = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(i));
+      for (int j = 0; j < m_N; ++j) {
+        auxJ             = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(j));
+        auxIpJ           = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(i + j));
         h_A(i, j).real() = -sin(auxIpJ) - sin(auxI) * sin(auxJ) - cos(auxI) * cos(auxJ);
         h_A(i, j).imag() = -sin(auxIpJ) - sin(auxI) * sin(auxJ) + cos(auxI) * cos(auxJ);
       }
     }
   } else {
-    for (int i = 0; i < _M; ++i) {
-      auxI = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(i));
-      for (int j = 0; j < _N; ++j) {
-        auxJ             = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(j));
-        auxImJ           = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(i - j));
+    for (int i = 0; i < m_M; ++i) {
+      auxI = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(i));
+      for (int j = 0; j < m_N; ++j) {
+        auxJ             = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(j));
+        auxImJ           = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(i - j));
         h_A(i, j).real() = -sin(auxImJ) - sin(auxI) * sin(auxJ) + cos(auxI) * cos(auxJ);
         h_A(i, j).imag() = -sin(auxImJ) - sin(auxI) * sin(auxJ) - cos(auxI) * cos(auxJ);
       }
     }
   }
 
-  if (_useHermitianOption) {
-    for (int i = 0; i < _M; ++i) {
-      auxI = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(i));
-      for (int j = 0; j < _N; ++j) {
-        auxJ                    = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(j));
-        auxIpJ                  = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(i + j));
+  if (m_useHermitianOption) {
+    for (int i = 0; i < m_M; ++i) {
+      auxI = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(i));
+      for (int j = 0; j < m_N; ++j) {
+        auxJ                    = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(j));
+        auxIpJ                  = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(i + j));
         h_expected(i, j).real() = -2. * sin(auxI) * sin(auxJ);
         h_expected(i, j).imag() = 2. * (cos(auxIpJ) - sin(auxIpJ));
       }
     }
   } else {
-    for (int i = 0; i < _M; ++i) {
-      auxI = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(i));
-      for (int j = 0; j < _N; ++j) {
-        auxJ                    = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(j));
-        auxImJ                  = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(i - j));
+    for (int i = 0; i < m_M; ++i) {
+      auxI = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(i));
+      for (int j = 0; j < m_N; ++j) {
+        auxJ                    = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(j));
+        auxImJ                  = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(i - j));
         h_expected(i, j).real() = 2. * cos(auxI) * cos(auxJ);
         h_expected(i, j).imag() = -2. * sin(auxImJ);
       }
@@ -505,34 +482,34 @@ template <class T>
 typename std::enable_if<
     !std::is_same<T, Kokkos::complex<float>>::value && !std::is_same<T, Kokkos::complex<double>>::value, void>::type
 GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::populateAnalyticalValues(
-    T& alpha, _HostViewTypeX& h_x, _HostViewTypeY& h_y, _HostViewTypeA& h_A, _ViewTypeExpected& h_expected) {
-  _AuxType auxI(0.);
-  _AuxType auxJ(0.);
-  _AuxType auxIpJ(0.);
+    T& alpha, HostViewTypeX& h_x, HostViewTypeY& h_y, HostViewTypeA& h_A, ViewTypeExpected& h_expected) {
+  AuxType auxI(0.);
+  AuxType auxJ(0.);
+  AuxType auxIpJ(0.);
 
   alpha = 3;
 
-  for (int i = 0; i < _M; ++i) {
-    auxI   = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(i));
+  for (int i = 0; i < m_M; ++i) {
+    auxI   = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(i));
     h_x[i] = sin(auxI);
   }
 
-  for (int j = 0; j < _N; ++j) {
-    auxJ   = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(j));
+  for (int j = 0; j < m_N; ++j) {
+    auxJ   = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(j));
     h_y[j] = cos(auxJ);
   }
 
-  for (int i = 0; i < _M; ++i) {
-    auxI = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(i));
-    for (int j = 0; j < _N; ++j) {
-      auxJ      = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(j));
+  for (int i = 0; i < m_M; ++i) {
+    auxI = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(i));
+    for (int j = 0; j < m_N; ++j) {
+      auxJ      = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(j));
       h_A(i, j) = 3 * cos(auxI) * sin(auxJ);
     }
   }
 
-  for (int i = 0; i < _M; ++i) {
-    for (int j = 0; j < _N; ++j) {
-      auxIpJ           = this->shrinkAngleToZeroTwoPiRange(static_cast<_AuxType>(i + j));
+  for (int i = 0; i < m_M; ++i) {
+    for (int j = 0; j < m_N; ++j) {
+      auxIpJ           = this->shrinkAngleToZeroTwoPiRange(static_cast<AuxType>(i + j));
       h_expected(i, j) = 3 * sin(auxIpJ);
     }
   }
@@ -544,32 +521,32 @@ template <class T>
 typename std::enable_if<
     std::is_same<T, Kokkos::complex<float>>::value || std::is_same<T, Kokkos::complex<double>>::value, void>::type
 GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::populateVanillaValues(
-    const T& alpha, const _HostViewTypeX& h_x, const _HostViewTypeY& h_y, const _HostViewTypeA& h_A,
-    _ViewTypeExpected& h_vanilla) {
-  if (_vanillaUsesDifferentOrderOfOps) {
-    if (_useHermitianOption) {
-      for (int i = 0; i < _M; ++i) {
-        for (int j = 0; j < _N; ++j) {
-          h_vanilla(i, j) = h_A(i, j) + alpha * _KAT_A::conj(h_y(j)) * h_x(i);
+    const T& alpha, const HostViewTypeX& h_x, const HostViewTypeY& h_y, const HostViewTypeA& h_A,
+    ViewTypeExpected& h_vanilla) {
+  if (m_vanillaUsesDifferentOrderOfOps) {
+    if (m_useHermitianOption) {
+      for (int i = 0; i < m_M; ++i) {
+        for (int j = 0; j < m_N; ++j) {
+          h_vanilla(i, j) = h_A(i, j) + alpha * KAT_A::conj(h_y(j)) * h_x(i);
         }
       }
     } else {
-      for (int i = 0; i < _M; ++i) {
-        for (int j = 0; j < _N; ++j) {
+      for (int i = 0; i < m_M; ++i) {
+        for (int j = 0; j < m_N; ++j) {
           h_vanilla(i, j) = h_A(i, j) + alpha * h_y(j) * h_x(i);
         }
       }
     }
   } else {
-    if (_useHermitianOption) {
-      for (int i = 0; i < _M; ++i) {
-        for (int j = 0; j < _N; ++j) {
-          h_vanilla(i, j) = h_A(i, j) + alpha * h_x(i) * _KAT_A::conj(h_y(j));
+    if (m_useHermitianOption) {
+      for (int i = 0; i < m_M; ++i) {
+        for (int j = 0; j < m_N; ++j) {
+          h_vanilla(i, j) = h_A(i, j) + alpha * h_x(i) * KAT_A::conj(h_y(j));
         }
       }
     } else {
-      for (int i = 0; i < _M; ++i) {
-        for (int j = 0; j < _N; ++j) {
+      for (int i = 0; i < m_M; ++i) {
+        for (int j = 0; j < m_N; ++j) {
           h_vanilla(i, j) = h_A(i, j) + alpha * h_x(i) * h_y(j);
         }
       }
@@ -583,17 +560,17 @@ template <class T>
 typename std::enable_if<
     !std::is_same<T, Kokkos::complex<float>>::value && !std::is_same<T, Kokkos::complex<double>>::value, void>::type
 GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::populateVanillaValues(
-    const T& alpha, const _HostViewTypeX& h_x, const _HostViewTypeY& h_y, const _HostViewTypeA& h_A,
-    _ViewTypeExpected& h_vanilla) {
-  if (_vanillaUsesDifferentOrderOfOps) {
-    for (int i = 0; i < _M; ++i) {
-      for (int j = 0; j < _N; ++j) {
+    const T& alpha, const HostViewTypeX& h_x, const HostViewTypeY& h_y, const HostViewTypeA& h_A,
+    ViewTypeExpected& h_vanilla) {
+  if (m_vanillaUsesDifferentOrderOfOps) {
+    for (int i = 0; i < m_M; ++i) {
+      for (int j = 0; j < m_N; ++j) {
         h_vanilla(i, j) = h_A(i, j) + alpha * h_y(j) * h_x(i);
       }
     }
   } else {
-    for (int i = 0; i < _M; ++i) {
-      for (int j = 0; j < _N; ++j) {
+    for (int i = 0; i < m_M; ++i) {
+      for (int j = 0; j < m_N; ++j) {
         h_vanilla(i, j) = h_A(i, j) + alpha * h_x(i) * h_y(j);
       }
     }
@@ -623,85 +600,85 @@ template <class T>
 typename std::enable_if<
     std::is_same<T, Kokkos::complex<float>>::value || std::is_same<T, Kokkos::complex<double>>::value, void>::type
 GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::compareVanillaAgainstExpected(
-    const T& alpha, const _ViewTypeExpected& h_vanilla, const _ViewTypeExpected& h_expected) {
-  int maxNumErrorsAllowed(static_cast<double>(_M) * static_cast<double>(_N) * 1.e-3);
+    const T& alpha, const ViewTypeExpected& h_vanilla, const ViewTypeExpected& h_expected) {
+  int maxNumErrorsAllowed(static_cast<double>(m_M) * static_cast<double>(m_N) * 1.e-3);
 
-  if (_useAnalyticalResults) {
+  if (m_useAnalyticalResults) {
     int numErrorsRealAbs(0);
     int numErrorsRealRel(0);
     int numErrorsImagAbs(0);
     int numErrorsImagRel(0);
-    _AuxType diff(0.);
-    _AuxType diffThreshold(0.);
+    AuxType diff(0.);
+    AuxType diffThreshold(0.);
     bool errorHappened(false);
-    _AuxType maxErrorRealRel(0.);
+    AuxType maxErrorRealRel(0.);
     int iForMaxErrorRealRel(0);
     int jForMaxErrorRealRel(0);
-    _AuxType maxErrorImagRel(0.);
+    AuxType maxErrorImagRel(0.);
     int iForMaxErrorImagRel(0);
     int jForMaxErrorImagRel(0);
 
-    for (int i(0); i < _M; ++i) {
-      for (int j(0); j < _N; ++j) {
-        diff          = _KAT_A::abs(h_expected(i, j).real() - h_vanilla(i, j).real());
+    for (int i(0); i < m_M; ++i) {
+      for (int j(0); j < m_N; ++j) {
+        diff          = KAT_A::abs(h_expected(i, j).real() - h_vanilla(i, j).real());
         errorHappened = false;
         if (h_expected(i, j).real() == 0.) {
-          diffThreshold = _KAT_A::abs(_absTol);
+          diffThreshold = KAT_A::abs(m_absTol);
           if (diff > diffThreshold) {
             errorHappened = true;
             numErrorsRealAbs++;
           }
         } else {
-          _AuxType aux = diff / _KAT_A::abs(h_expected(i, j).real());
+          AuxType aux = diff / KAT_A::abs(h_expected(i, j).real());
           if (maxErrorRealRel < aux) {
             maxErrorRealRel     = aux;
             iForMaxErrorRealRel = i;
             jForMaxErrorRealRel = j;
           }
 
-          diffThreshold = _KAT_A::abs(_relTol * h_expected(i, j).real());
+          diffThreshold = KAT_A::abs(m_relTol * h_expected(i, j).real());
           if (diff > diffThreshold) {
             errorHappened = true;
             numErrorsRealRel++;
           }
         }
         if (errorHappened && (numErrorsRealAbs + numErrorsRealRel == 1)) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
           std::cout << "ERROR, i = " << i << ", j = " << j << ": h_expected(i,j).real() = " << h_expected(i, j).real()
                     << ", h_vanilla(i,j).real() = " << h_vanilla(i, j).real()
-                    << ", _KAT_A::abs(h_expected(i,j).real() - "
+                    << ", KAT_A::abs(h_expected(i,j).real() - "
                        "h_vanilla(i,j).real()) = "
                     << diff << ", diffThreshold = " << diffThreshold << std::endl;
 #endif
         }
 
-        diff          = _KAT_A::abs(h_expected(i, j).imag() - h_vanilla(i, j).imag());
+        diff          = KAT_A::abs(h_expected(i, j).imag() - h_vanilla(i, j).imag());
         errorHappened = false;
         if (h_expected(i, j).imag() == 0.) {
-          diffThreshold = _KAT_A::abs(_absTol);
+          diffThreshold = KAT_A::abs(m_absTol);
           if (diff > diffThreshold) {
             errorHappened = true;
             numErrorsImagAbs++;
           }
         } else {
-          _AuxType aux = diff / _KAT_A::abs(h_expected(i, j).imag());
+          AuxType aux = diff / KAT_A::abs(h_expected(i, j).imag());
           if (maxErrorImagRel < aux) {
             maxErrorImagRel     = aux;
             iForMaxErrorImagRel = i;
             jForMaxErrorImagRel = j;
           }
 
-          diffThreshold = _KAT_A::abs(_relTol * h_expected(i, j).imag());
+          diffThreshold = KAT_A::abs(m_relTol * h_expected(i, j).imag());
           if (diff > diffThreshold) {
             errorHappened = true;
             numErrorsImagRel++;
           }
         }
         if (errorHappened && (numErrorsImagAbs + numErrorsImagRel == 1)) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
           std::cout << "ERROR, i = " << i << ", j = " << j << ": h_expected(i,j).imag() = " << h_expected(i, j).imag()
                     << ", h_vanilla(i,j).imag() = " << h_vanilla(i, j).imag()
-                    << ", _KAT_A::abs(h_expected(i,j).imag() - "
+                    << ", KAT_A::abs(h_expected(i,j).imag() - "
                        "h_vanilla(i,j).imag()) = "
                     << diff << ", diffThreshold = " << diffThreshold << std::endl;
 #endif
@@ -710,20 +687,20 @@ GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::comp
     }    // for i
     {
       std::ostringstream msg;
-      msg << ", A is " << _M << " by " << _N << ", _A_is_lr = " << _A_is_lr << ", _A_is_ll = " << _A_is_ll
-          << ", alpha type = " << typeid(alpha).name() << ", _useHermitianOption = " << _useHermitianOption
+      msg << ", A is " << m_M << " by " << m_N << ", m_A_is_lr = " << m_A_is_lr << ", m_A_is_ll = " << m_A_is_ll
+          << ", alpha type = " << typeid(alpha).name() << ", m_useHermitianOption = " << m_useHermitianOption
           << ": vanilla differs too much from analytical on real components"
           << ", numErrorsRealAbs = " << numErrorsRealAbs << ", numErrorsRealRel = " << numErrorsRealRel
           << ", maxErrorRealRel = " << maxErrorRealRel << ", iForMaxErrorRealRel = " << iForMaxErrorRealRel
           << ", jForMaxErrorRealRel = " << jForMaxErrorRealRel << ", h_expected(i,j).real() = "
-          << (((_M > 0) && (_N > 0)) ? h_expected(iForMaxErrorRealRel, jForMaxErrorRealRel).real() : 9.999e+99)
+          << (((m_M > 0) && (m_N > 0)) ? h_expected(iForMaxErrorRealRel, jForMaxErrorRealRel).real() : 9.999e+99)
           << ", h_vanilla(i,j).real() = "
-          << (((_M > 0) && (_N > 0)) ? h_vanilla(iForMaxErrorRealRel, jForMaxErrorRealRel).real() : 9.999e+99)
+          << (((m_M > 0) && (m_N > 0)) ? h_vanilla(iForMaxErrorRealRel, jForMaxErrorRealRel).real() : 9.999e+99)
           << ", maxNumErrorsAllowed = " << maxNumErrorsAllowed;
 
       int numErrorsReal(numErrorsRealAbs + numErrorsRealRel);
       if (numErrorsReal > 0) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
         std::cout << "WARNING" << msg.str() << std::endl;
 #endif
       }
@@ -731,20 +708,20 @@ GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::comp
     }
     {
       std::ostringstream msg;
-      msg << ", A is " << _M << " by " << _N << ", _A_is_lr = " << _A_is_lr << ", _A_is_ll = " << _A_is_ll
-          << ", alpha type = " << typeid(alpha).name() << ", _useHermitianOption = " << _useHermitianOption
+      msg << ", A is " << m_M << " by " << m_N << ", m_A_is_lr = " << m_A_is_lr << ", m_A_is_ll = " << m_A_is_ll
+          << ", alpha type = " << typeid(alpha).name() << ", m_useHermitianOption = " << m_useHermitianOption
           << ": vanilla differs too much from analytical on imag components"
           << ", numErrorsImagAbs = " << numErrorsImagAbs << ", numErrorsImagRel = " << numErrorsImagRel
           << ", maxErrorImagRel = " << maxErrorImagRel << ", iForMaxErrorImagRel = " << iForMaxErrorImagRel
           << ", jForMaxErrorImagRel = " << jForMaxErrorImagRel << ", h_expected(i,j).imag() = "
-          << (((_M > 0) && (_N > 0)) ? h_expected(iForMaxErrorImagRel, jForMaxErrorImagRel).imag() : 9.999e+99)
+          << (((m_M > 0) && (m_N > 0)) ? h_expected(iForMaxErrorImagRel, jForMaxErrorImagRel).imag() : 9.999e+99)
           << ", h_vanilla(i,j).imag() = "
-          << (((_M > 0) && (_N > 0)) ? h_vanilla(iForMaxErrorImagRel, jForMaxErrorImagRel).imag() : 9.999e+99)
+          << (((m_M > 0) && (m_N > 0)) ? h_vanilla(iForMaxErrorImagRel, jForMaxErrorImagRel).imag() : 9.999e+99)
           << ", maxNumErrorsAllowed = " << maxNumErrorsAllowed;
 
       int numErrorsImag(numErrorsImagAbs + numErrorsImagRel);
       if (numErrorsImag > 0) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
         std::cout << "WARNING" << msg.str() << std::endl;
 #endif
       }
@@ -754,11 +731,11 @@ GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::comp
     int numErrorsReal(0);
     int numErrorsImag(0);
 
-    for (int i(0); i < _M; ++i) {
-      for (int j(0); j < _N; ++j) {
+    for (int i(0); i < m_M; ++i) {
+      for (int j(0); j < m_N; ++j) {
         if (h_expected(i, j).real() != h_vanilla(i, j).real()) {
           if (numErrorsReal == 0) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
             std::cout << "ERROR, i = " << i << ", j = " << j << ": h_expected(i,j).real() = " << h_expected(i, j).real()
                       << ", h_vanilla(i,j).real() = " << h_vanilla(i, j).real() << std::endl;
 #endif
@@ -768,7 +745,7 @@ GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::comp
 
         if (h_expected(i, j).imag() != h_vanilla(i, j).imag()) {
           if (numErrorsImag == 0) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
             std::cout << "ERROR, i = " << i << ", j = " << j << ": h_expected(i,j).imag() = " << h_expected(i, j).imag()
                       << ", h_vanilla(i,j).imag() = " << h_vanilla(i, j).imag() << std::endl;
 #endif
@@ -778,15 +755,15 @@ GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::comp
       }  // for j
     }    // for i
     EXPECT_EQ(numErrorsReal, 0) << "Failed test"
-                                << ", A is " << _M << " by " << _N << ", _A_is_lr = " << _A_is_lr
-                                << ", _A_is_ll = " << _A_is_ll << ", alpha type = " << typeid(alpha).name()
-                                << ", _useHermitianOption = " << _useHermitianOption
+                                << ", A is " << m_M << " by " << m_N << ", m_A_is_lr = " << m_A_is_lr
+                                << ", m_A_is_ll = " << m_A_is_ll << ", alpha type = " << typeid(alpha).name()
+                                << ", m_useHermitianOption = " << m_useHermitianOption
                                 << ": vanilla result is incorrect on real components"
                                 << ", numErrorsReal = " << numErrorsReal;
     EXPECT_EQ(numErrorsImag, 0) << "Failed test"
-                                << ", A is " << _M << " by " << _N << ", _A_is_lr = " << _A_is_lr
-                                << ", _A_is_ll = " << _A_is_ll << ", alpha type = " << typeid(alpha).name()
-                                << ", _useHermitianOption = " << _useHermitianOption
+                                << ", A is " << m_M << " by " << m_N << ", m_A_is_lr = " << m_A_is_lr
+                                << ", m_A_is_ll = " << m_A_is_ll << ", alpha type = " << typeid(alpha).name()
+                                << ", m_useHermitianOption = " << m_useHermitianOption
                                 << ": vanilla result is incorrect on imag components"
                                 << ", numErrorsImag = " << numErrorsImag;
   }
@@ -798,48 +775,48 @@ template <class T>
 typename std::enable_if<
     !std::is_same<T, Kokkos::complex<float>>::value && !std::is_same<T, Kokkos::complex<double>>::value, void>::type
 GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::compareVanillaAgainstExpected(
-    const T& alpha, const _ViewTypeExpected& h_vanilla, const _ViewTypeExpected& h_expected) {
-  int maxNumErrorsAllowed(static_cast<double>(_M) * static_cast<double>(_N) * 1.e-3);
+    const T& alpha, const ViewTypeExpected& h_vanilla, const ViewTypeExpected& h_expected) {
+  int maxNumErrorsAllowed(static_cast<double>(m_M) * static_cast<double>(m_N) * 1.e-3);
 
-  if (_useAnalyticalResults) {
+  if (m_useAnalyticalResults) {
     int numErrorsAbs(0);
     int numErrorsRel(0);
-    _AuxType diff(0.);
-    _AuxType diffThreshold(0.);
+    AuxType diff(0.);
+    AuxType diffThreshold(0.);
     bool errorHappened(false);
-    _AuxType maxErrorRel(0.);
+    AuxType maxErrorRel(0.);
     int iForMaxErrorRel(0);
     int jForMaxErrorRel(0);
 
-    for (int i(0); i < _M; ++i) {
-      for (int j(0); j < _N; ++j) {
-        diff          = _KAT_A::abs(h_expected(i, j) - h_vanilla(i, j));
+    for (int i(0); i < m_M; ++i) {
+      for (int j(0); j < m_N; ++j) {
+        diff          = KAT_A::abs(h_expected(i, j) - h_vanilla(i, j));
         errorHappened = false;
         if (h_expected(i, j) == 0.) {
-          diffThreshold = _KAT_A::abs(_absTol);
+          diffThreshold = KAT_A::abs(m_absTol);
           if (diff > diffThreshold) {
             errorHappened = true;
             numErrorsAbs++;
           }
         } else {
-          _AuxType aux = diff / _KAT_A::abs(h_expected(i, j));
+          AuxType aux = diff / KAT_A::abs(h_expected(i, j));
           if (maxErrorRel < aux) {
             maxErrorRel     = aux;
             iForMaxErrorRel = i;
             jForMaxErrorRel = j;
           }
 
-          diffThreshold = _KAT_A::abs(_relTol * h_expected(i, j));
+          diffThreshold = KAT_A::abs(m_relTol * h_expected(i, j));
           if (diff > diffThreshold) {
             errorHappened = true;
             numErrorsRel++;
           }
         }
         if (errorHappened && (numErrorsAbs + numErrorsRel == 1)) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
           std::cout << "ERROR, i = " << i << ", j = " << j << ": h_expected(i,j) = " << h_expected(i, j)
                     << ", h_vanilla(i,j) = " << h_vanilla(i, j)
-                    << ", _KAT_A::abs(h_expected(i,j) - h_vanilla(i,j)) = " << diff
+                    << ", KAT_A::abs(h_expected(i,j) - h_vanilla(i,j)) = " << diff
                     << ", diffThreshold = " << diffThreshold << std::endl;
 #endif
         }
@@ -847,19 +824,20 @@ GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::comp
     }    // for i
     {
       std::ostringstream msg;
-      msg << ", A is " << _M << " by " << _N << ", _A_is_lr = " << _A_is_lr << ", _A_is_ll = " << _A_is_ll
-          << ", alpha type = " << typeid(alpha).name() << ", _useHermitianOption = " << _useHermitianOption
+      msg << ", A is " << m_M << " by " << m_N << ", m_A_is_lr = " << m_A_is_lr << ", m_A_is_ll = " << m_A_is_ll
+          << ", alpha type = " << typeid(alpha).name() << ", m_useHermitianOption = " << m_useHermitianOption
           << ": vanilla differs too much from expected"
           << ", numErrorsAbs = " << numErrorsAbs << ", numErrorsRel = " << numErrorsRel
           << ", maxErrorRel = " << maxErrorRel << ", iForMaxErrorRel = " << iForMaxErrorRel
           << ", jForMaxErrorRel = " << jForMaxErrorRel << ", h_expected(i,j) = "
-          << (((_M > 0) && (_N > 0)) ? h_expected(iForMaxErrorRel, jForMaxErrorRel) : 9.999e+99)
-          << ", h_vanilla(i,j) = " << (((_M > 0) && (_N > 0)) ? h_vanilla(iForMaxErrorRel, jForMaxErrorRel) : 9.999e+99)
+          << (((m_M > 0) && (m_N > 0)) ? h_expected(iForMaxErrorRel, jForMaxErrorRel) : 9.999e+99)
+          << ", h_vanilla(i,j) = "
+          << (((m_M > 0) && (m_N > 0)) ? h_vanilla(iForMaxErrorRel, jForMaxErrorRel) : 9.999e+99)
           << ", maxNumErrorsAllowed = " << maxNumErrorsAllowed;
 
       int numErrors(numErrorsAbs + numErrorsRel);
       if (numErrors > 0) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
         std::cout << "WARNING" << msg.str() << std::endl;
 #endif
       }
@@ -868,11 +846,11 @@ GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::comp
   } else {
     int numErrors(0);
 
-    for (int i(0); i < _M; ++i) {
-      for (int j(0); j < _N; ++j) {
+    for (int i(0); i < m_M; ++i) {
+      for (int j(0); j < m_N; ++j) {
         if (h_expected(i, j) != h_vanilla(i, j)) {
           if (numErrors == 0) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
             std::cout << "ERROR, i = " << i << ", j = " << j << ": h_expected(i,j) = " << h_expected(i, j)
                       << ", h_vanilla(i,j) = " << h_vanilla(i, j) << std::endl;
 #endif
@@ -882,9 +860,9 @@ GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::comp
       }  // for j
     }    // for i
     EXPECT_EQ(numErrors, 0) << "Failed test"
-                            << ", A is " << _M << " by " << _N << ", _A_is_lr = " << _A_is_lr
-                            << ", _A_is_ll = " << _A_is_ll << ", alpha type = " << typeid(alpha).name()
-                            << ", _useHermitianOption = " << _useHermitianOption << ": vanilla result is incorrect"
+                            << ", A is " << m_M << " by " << m_N << ", m_A_is_lr = " << m_A_is_lr
+                            << ", m_A_is_ll = " << m_A_is_ll << ", alpha type = " << typeid(alpha).name()
+                            << ", m_useHermitianOption = " << m_useHermitianOption << ": vanilla result is incorrect"
                             << ", numErrors = " << numErrors;
   }
 }
@@ -895,113 +873,113 @@ template <class T>
 typename std::enable_if<
     std::is_same<T, Kokkos::complex<float>>::value || std::is_same<T, Kokkos::complex<double>>::value, void>::type
 GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::compareKkGerAgainstExpected(
-    const T& alpha, const _HostViewTypeA& h_A, const _ViewTypeExpected& h_expected) {
-  int maxNumErrorsAllowed(static_cast<double>(_M) * static_cast<double>(_N) * 1.e-3);
+    const T& alpha, const HostViewTypeA& h_A, const ViewTypeExpected& h_expected) {
+  int maxNumErrorsAllowed(static_cast<double>(m_M) * static_cast<double>(m_N) * 1.e-3);
 
   int numErrorsRealAbs(0);
   int numErrorsRealRel(0);
   int numErrorsImagAbs(0);
   int numErrorsImagRel(0);
-  _AuxType diff(0.);
-  _AuxType diffThreshold(0.);
+  AuxType diff(0.);
+  AuxType diffThreshold(0.);
   bool errorHappened(false);
-  _AuxType maxErrorRealRel(0.);
+  AuxType maxErrorRealRel(0.);
   int iForMaxErrorRealRel(0);
   int jForMaxErrorRealRel(0);
-  _AuxType maxErrorImagRel(0.);
+  AuxType maxErrorImagRel(0.);
   int iForMaxErrorImagRel(0);
   int jForMaxErrorImagRel(0);
-  for (int i(0); i < _M; ++i) {
-    for (int j(0); j < _N; ++j) {
-      diff          = _KAT_A::abs(h_expected(i, j).real() - h_A(i, j).real());
+  for (int i(0); i < m_M; ++i) {
+    for (int j(0); j < m_N; ++j) {
+      diff          = KAT_A::abs(h_expected(i, j).real() - h_A(i, j).real());
       errorHappened = false;
       if (h_expected(i, j).real() == 0.) {
-        diffThreshold = _KAT_A::abs(_absTol);
+        diffThreshold = KAT_A::abs(m_absTol);
         if (diff > diffThreshold) {
           errorHappened = true;
           numErrorsRealAbs++;
         }
       } else {
-        _AuxType aux = diff / _KAT_A::abs(h_expected(i, j).real());
+        AuxType aux = diff / KAT_A::abs(h_expected(i, j).real());
         if (maxErrorRealRel < aux) {
           maxErrorRealRel     = aux;
           iForMaxErrorRealRel = i;
           jForMaxErrorRealRel = j;
         }
 
-        diffThreshold = _KAT_A::abs(_relTol * h_expected(i, j).real());
+        diffThreshold = KAT_A::abs(m_relTol * h_expected(i, j).real());
         if (diff > diffThreshold) {
           errorHappened = true;
           numErrorsRealRel++;
         }
       }
       if (errorHappened && (numErrorsRealAbs + numErrorsRealRel == 1)) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
         std::cout << "ERROR, i = " << i << ", j = " << j << ": h_expected(i,j).real() = " << h_expected(i, j).real()
                   << ", h_A(i,j).real() = " << h_A(i, j).real()
-                  << ", _KAT_A::abs(h_expected(i,j).real() - h_A(i,j).real()) = " << diff
+                  << ", KAT_A::abs(h_expected(i,j).real() - h_A(i,j).real()) = " << diff
                   << ", diffThreshold = " << diffThreshold << std::endl;
 #endif
       }
 
-      diff          = _KAT_A::abs(h_expected(i, j).imag() - h_A(i, j).imag());
+      diff          = KAT_A::abs(h_expected(i, j).imag() - h_A(i, j).imag());
       errorHappened = false;
       if (h_expected(i, j).imag() == 0.) {
-        diffThreshold = _KAT_A::abs(_absTol);
+        diffThreshold = KAT_A::abs(m_absTol);
         if (diff > diffThreshold) {
           errorHappened = true;
           numErrorsImagAbs++;
         }
       } else {
-        _AuxType aux = diff / _KAT_A::abs(h_expected(i, j).imag());
+        AuxType aux = diff / KAT_A::abs(h_expected(i, j).imag());
         if (maxErrorImagRel < aux) {
           maxErrorImagRel     = aux;
           iForMaxErrorImagRel = i;
           jForMaxErrorImagRel = j;
         }
 
-        diffThreshold = _KAT_A::abs(_relTol * h_expected(i, j).imag());
+        diffThreshold = KAT_A::abs(m_relTol * h_expected(i, j).imag());
         if (diff > diffThreshold) {
           errorHappened = true;
           numErrorsImagRel++;
         }
       }
       if (errorHappened && (numErrorsImagAbs + numErrorsImagRel == 1)) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
         std::cout << "ERROR, i = " << i << ", j = " << j << ": h_expected(i,j).imag() = " << h_expected(i, j).imag()
                   << ", h_A(i,j).imag() = " << h_A(i, j).imag()
-                  << ", _KAT_A::abs(h_expected(i,j).imag() - h_A(i,j).imag()) = " << diff
+                  << ", KAT_A::abs(h_expected(i,j).imag() - h_A(i,j).imag()) = " << diff
                   << ", diffThreshold = " << diffThreshold << std::endl;
 #endif
       }
     }  // for j
   }    // for i
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
-  std::cout << "A is " << _M << " by " << _N << ", _A_is_lr = " << _A_is_lr << ", _A_is_ll = " << _A_is_ll
-            << ", alpha type = " << typeid(alpha).name() << ", _useHermitianOption = " << _useHermitianOption
+#ifndef NDEBUG
+  std::cout << "A is " << m_M << " by " << m_N << ", m_A_is_lr = " << m_A_is_lr << ", m_A_is_ll = " << m_A_is_ll
+            << ", alpha type = " << typeid(alpha).name() << ", m_useHermitianOption = " << m_useHermitianOption
             << ", numErrorsRealAbs = " << numErrorsRealAbs << ", numErrorsRealRel = " << numErrorsRealRel
             << ", maxErrorRealRel = " << maxErrorRealRel << ", iForMaxErrorRealRel = " << iForMaxErrorRealRel
             << ", jForMaxErrorRealRel = " << jForMaxErrorRealRel << ", h_expected(i,j).real() = "
-            << (((_M > 0) && (_N > 0)) ? h_expected(iForMaxErrorRealRel, jForMaxErrorRealRel).real() : 9.999e+99)
+            << (((m_M > 0) && (m_N > 0)) ? h_expected(iForMaxErrorRealRel, jForMaxErrorRealRel).real() : 9.999e+99)
             << ", h_A(i,j).real() = "
-            << (((_M > 0) && (_N > 0)) ? h_A(iForMaxErrorRealRel, jForMaxErrorRealRel).real() : 9.999e+99)
+            << (((m_M > 0) && (m_N > 0)) ? h_A(iForMaxErrorRealRel, jForMaxErrorRealRel).real() : 9.999e+99)
             << ", numErrorsImagAbs = " << numErrorsImagAbs << ", numErrorsImagRel = " << numErrorsImagRel
             << ", maxErrorImagRel = " << maxErrorImagRel << ", iForMaxErrorImagRel = " << iForMaxErrorImagRel
             << ", jForMaxErrorImagRel = " << jForMaxErrorImagRel << ", h_expected(i,j).imag() = "
-            << (((_M > 0) && (_N > 0)) ? h_expected(iForMaxErrorImagRel, jForMaxErrorImagRel).imag() : 9.999e+99)
+            << (((m_M > 0) && (m_N > 0)) ? h_expected(iForMaxErrorImagRel, jForMaxErrorImagRel).imag() : 9.999e+99)
             << ", h_A(i,j).imag() = "
-            << (((_M > 0) && (_N > 0)) ? h_A(iForMaxErrorImagRel, jForMaxErrorImagRel).imag() : 9.999e+99)
+            << (((m_M > 0) && (m_N > 0)) ? h_A(iForMaxErrorImagRel, jForMaxErrorImagRel).imag() : 9.999e+99)
             << ", maxNumErrorsAllowed = " << maxNumErrorsAllowed << std::endl;
-  if ((_M == 2131) && (_N == 2131)) {
+  if ((m_M == 2131) && (m_N == 2131)) {
     std::cout << "Information"
-              << ": A is " << _M << " by " << _N << ", _A_is_lr = " << _A_is_lr << ", _A_is_ll = " << _A_is_ll
-              << ", alpha type = " << typeid(alpha).name() << ", _useHermitianOption = " << _useHermitianOption
+              << ": A is " << m_M << " by " << m_N << ", m_A_is_lr = " << m_A_is_lr << ", m_A_is_ll = " << m_A_is_ll
+              << ", alpha type = " << typeid(alpha).name() << ", m_useHermitianOption = " << m_useHermitianOption
               << ", h_expected(11, 2119) = (" << h_expected(11, 2119).real() << ", " << h_expected(11, 2119).imag()
               << ")"
               << ", h_A(11, 2119) = (" << h_A(11, 2119).real() << ", " << h_A(11, 2119).imag() << ")" << std::endl;
     std::cout << "Information"
-              << ": A is " << _M << " by " << _N << ", _A_is_lr = " << _A_is_lr << ", _A_is_ll = " << _A_is_ll
-              << ", alpha type = " << typeid(alpha).name() << ", _useHermitianOption = " << _useHermitianOption
+              << ": A is " << m_M << " by " << m_N << ", m_A_is_lr = " << m_A_is_lr << ", m_A_is_ll = " << m_A_is_ll
+              << ", alpha type = " << typeid(alpha).name() << ", m_useHermitianOption = " << m_useHermitianOption
               << ", h_expected(710, 1065) = (" << h_expected(710, 1065).real() << ", " << h_expected(710, 1065).imag()
               << ")"
               << ", h_A(710, 1065) = (" << h_A(710, 1065).real() << ", " << h_A(710, 1065).imag() << ")" << std::endl;
@@ -1009,20 +987,20 @@ GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::comp
 #endif
   {
     std::ostringstream msg;
-    msg << ", A is " << _M << " by " << _N << ", _A_is_lr = " << _A_is_lr << ", _A_is_ll = " << _A_is_ll
-        << ", alpha type = " << typeid(alpha).name() << ", _useHermitianOption = " << _useHermitianOption
+    msg << ", A is " << m_M << " by " << m_N << ", m_A_is_lr = " << m_A_is_lr << ", m_A_is_ll = " << m_A_is_ll
+        << ", alpha type = " << typeid(alpha).name() << ", m_useHermitianOption = " << m_useHermitianOption
         << ": ger result is incorrect on real components"
         << ", numErrorsRealAbs = " << numErrorsRealAbs << ", numErrorsRealRel = " << numErrorsRealRel
         << ", maxErrorRealRel = " << maxErrorRealRel << ", iForMaxErrorRealRel = " << iForMaxErrorRealRel
         << ", jForMaxErrorRealRel = " << jForMaxErrorRealRel << ", h_expected(i,j).real() = "
-        << (((_M > 0) && (_N > 0)) ? h_expected(iForMaxErrorRealRel, jForMaxErrorRealRel).real() : 9.999e+99)
+        << (((m_M > 0) && (m_N > 0)) ? h_expected(iForMaxErrorRealRel, jForMaxErrorRealRel).real() : 9.999e+99)
         << ", h_A(i,j).real() = "
-        << (((_M > 0) && (_N > 0)) ? h_A(iForMaxErrorRealRel, jForMaxErrorRealRel).real() : 9.999e+99)
+        << (((m_M > 0) && (m_N > 0)) ? h_A(iForMaxErrorRealRel, jForMaxErrorRealRel).real() : 9.999e+99)
         << ", maxNumErrorsAllowed = " << maxNumErrorsAllowed;
 
     int numErrorsReal(numErrorsRealAbs + numErrorsRealRel);
     if (numErrorsReal > 0) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
       std::cout << "WARNING" << msg.str() << std::endl;
 #endif
     }
@@ -1030,20 +1008,20 @@ GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::comp
   }
   {
     std::ostringstream msg;
-    msg << ", A is " << _M << " by " << _N << ", _A_is_lr = " << _A_is_lr << ", _A_is_ll = " << _A_is_ll
-        << ", alpha type = " << typeid(alpha).name() << ", _useHermitianOption = " << _useHermitianOption
+    msg << ", A is " << m_M << " by " << m_N << ", m_A_is_lr = " << m_A_is_lr << ", m_A_is_ll = " << m_A_is_ll
+        << ", alpha type = " << typeid(alpha).name() << ", m_useHermitianOption = " << m_useHermitianOption
         << ": ger result is incorrect on imag components"
         << ", numErrorsImagAbs = " << numErrorsImagAbs << ", numErrorsImagRel = " << numErrorsImagRel
         << ", maxErrorImagRel = " << maxErrorImagRel << ", iForMaxErrorImagRel = " << iForMaxErrorImagRel
         << ", jForMaxErrorImagRel = " << jForMaxErrorImagRel << ", h_expected(i,j).imag() = "
-        << (((_M > 0) && (_N > 0)) ? h_expected(iForMaxErrorImagRel, jForMaxErrorImagRel).imag() : 9.999e+99)
+        << (((m_M > 0) && (m_N > 0)) ? h_expected(iForMaxErrorImagRel, jForMaxErrorImagRel).imag() : 9.999e+99)
         << ", h_A(i,j).imag() = "
-        << (((_M > 0) && (_N > 0)) ? h_A(iForMaxErrorImagRel, jForMaxErrorImagRel).imag() : 9.999e+99)
+        << (((m_M > 0) && (m_N > 0)) ? h_A(iForMaxErrorImagRel, jForMaxErrorImagRel).imag() : 9.999e+99)
         << ", maxNumErrorsAllowed = " << maxNumErrorsAllowed;
 
     int numErrorsImag(numErrorsImagAbs + numErrorsImagRel);
     if (numErrorsImag > 0) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
       std::cout << "WARNING" << msg.str() << std::endl;
 #endif
     }
@@ -1057,75 +1035,75 @@ template <class T>
 typename std::enable_if<
     !std::is_same<T, Kokkos::complex<float>>::value && !std::is_same<T, Kokkos::complex<double>>::value, void>::type
 GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::compareKkGerAgainstExpected(
-    const T& alpha, const _HostViewTypeA& h_A, const _ViewTypeExpected& h_expected) {
-  int maxNumErrorsAllowed(static_cast<double>(_M) * static_cast<double>(_N) * 1.e-3);
+    const T& alpha, const HostViewTypeA& h_A, const ViewTypeExpected& h_expected) {
+  int maxNumErrorsAllowed(static_cast<double>(m_M) * static_cast<double>(m_N) * 1.e-3);
 
   int numErrorsAbs(0);
   int numErrorsRel(0);
-  _AuxType diff(0.);
-  _AuxType diffThreshold(0.);
+  AuxType diff(0.);
+  AuxType diffThreshold(0.);
   bool errorHappened(false);
-  _AuxType maxErrorRel(0.);
+  AuxType maxErrorRel(0.);
   int iForMaxErrorRel(0);
   int jForMaxErrorRel(0);
-  for (int i(0); i < _M; ++i) {
-    for (int j(0); j < _N; ++j) {
-      diff          = _KAT_A::abs(h_expected(i, j) - h_A(i, j));
+  for (int i(0); i < m_M; ++i) {
+    for (int j(0); j < m_N; ++j) {
+      diff          = KAT_A::abs(h_expected(i, j) - h_A(i, j));
       errorHappened = false;
       if (h_expected(i, j) == 0.) {
-        diffThreshold = _KAT_A::abs(_absTol);
+        diffThreshold = KAT_A::abs(m_absTol);
         if (diff > diffThreshold) {
           errorHappened = true;
           numErrorsAbs++;
         }
       } else {
-        _AuxType aux = diff / _KAT_A::abs(h_expected(i, j));
+        AuxType aux = diff / KAT_A::abs(h_expected(i, j));
         if (maxErrorRel < aux) {
           maxErrorRel     = aux;
           iForMaxErrorRel = i;
           jForMaxErrorRel = j;
         }
 
-        diffThreshold = _KAT_A::abs(_relTol * h_expected(i, j));
+        diffThreshold = KAT_A::abs(m_relTol * h_expected(i, j));
         if (diff > diffThreshold) {
           errorHappened = true;
           numErrorsRel++;
         }
       }
       if (errorHappened && (numErrorsAbs + numErrorsRel == 1)) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
         std::cout << "ERROR, i = " << i << ", j = " << j << ": h_expected(i,j) = " << h_expected(i, j)
-                  << ", h_A(i,j) = " << h_A(i, j) << ", _KAT_A::abs(h_expected(i,j) - h_A(i,j)) = " << diff
+                  << ", h_A(i,j) = " << h_A(i, j) << ", KAT_A::abs(h_expected(i,j) - h_A(i,j)) = " << diff
                   << ", diffThreshold = " << diffThreshold << std::endl;
 #endif
       }
     }  // for j
   }    // for i
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
-  std::cout << "A is " << _M << " by " << _N << ", _A_is_lr = " << _A_is_lr << ", _A_is_ll = " << _A_is_ll
-            << ", alpha type = " << typeid(alpha).name() << ", _useHermitianOption = " << _useHermitianOption
+#ifndef NDEBUG
+  std::cout << "A is " << m_M << " by " << m_N << ", m_A_is_lr = " << m_A_is_lr << ", m_A_is_ll = " << m_A_is_ll
+            << ", alpha type = " << typeid(alpha).name() << ", m_useHermitianOption = " << m_useHermitianOption
             << ", numErrorsAbs = " << numErrorsAbs << ", numErrorsRel = " << numErrorsRel
             << ", maxErrorRel = " << maxErrorRel << ", iForMaxErrorRel = " << iForMaxErrorRel
             << ", jForMaxErrorRel = " << jForMaxErrorRel << ", h_expected(i,j) = "
-            << (((_M > 0) && (_N > 0)) ? h_expected(iForMaxErrorRel, jForMaxErrorRel) : 9.999e+99)
-            << ", h_A(i,j) = " << (((_M > 0) && (_N > 0)) ? h_A(iForMaxErrorRel, jForMaxErrorRel) : 9.999e+99)
+            << (((m_M > 0) && (m_N > 0)) ? h_expected(iForMaxErrorRel, jForMaxErrorRel) : 9.999e+99)
+            << ", h_A(i,j) = " << (((m_M > 0) && (m_N > 0)) ? h_A(iForMaxErrorRel, jForMaxErrorRel) : 9.999e+99)
             << ", maxNumErrorsAllowed = " << maxNumErrorsAllowed << std::endl;
 #endif
   {
     std::ostringstream msg;
-    msg << ", A is " << _M << " by " << _N << ", _A_is_lr = " << _A_is_lr << ", _A_is_ll = " << _A_is_ll
-        << ", alpha type = " << typeid(alpha).name() << ", _useHermitianOption = " << _useHermitianOption
+    msg << ", A is " << m_M << " by " << m_N << ", m_A_is_lr = " << m_A_is_lr << ", m_A_is_ll = " << m_A_is_ll
+        << ", alpha type = " << typeid(alpha).name() << ", m_useHermitianOption = " << m_useHermitianOption
         << ": ger result is incorrect"
         << ", numErrorsAbs = " << numErrorsAbs << ", numErrorsRel = " << numErrorsRel
         << ", maxErrorRel = " << maxErrorRel << ", iForMaxErrorRel = " << iForMaxErrorRel
-        << ", jForMaxErrorRel = " << jForMaxErrorRel
-        << ", h_expected(i,j) = " << (((_M > 0) && (_N > 0)) ? h_expected(iForMaxErrorRel, jForMaxErrorRel) : 9.999e+99)
-        << ", h_A(i,j) = " << (((_M > 0) && (_N > 0)) ? h_A(iForMaxErrorRel, jForMaxErrorRel) : 9.999e+99)
+        << ", jForMaxErrorRel = " << jForMaxErrorRel << ", h_expected(i,j) = "
+        << (((m_M > 0) && (m_N > 0)) ? h_expected(iForMaxErrorRel, jForMaxErrorRel) : 9.999e+99)
+        << ", h_A(i,j) = " << (((m_M > 0) && (m_N > 0)) ? h_A(iForMaxErrorRel, jForMaxErrorRel) : 9.999e+99)
         << ", maxNumErrorsAllowed = " << maxNumErrorsAllowed;
 
     int numErrors(numErrorsAbs + numErrorsRel);
     if (numErrors > 0) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
       std::cout << "WARNING" << msg.str() << std::endl;
 #endif
     }
@@ -1136,26 +1114,26 @@ GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::comp
 template <class ScalarX, class tLayoutX, class ScalarY, class tLayoutY, class ScalarA, class tLayoutA, class Device>
 template <class TX, class TY>
 void GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>::callKkGerAndCompareAgainstExpected(
-    const ScalarA& alpha, TX& x, TY& y, view_stride_adapter<_ViewTypeA, false>& A, const _ViewTypeExpected& h_expected,
-    const std::string& situation) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+    const ScalarA& alpha, TX& x, TY& y, TestUtils::view_stride_adapter<ViewTypeA, false>& A,
+    const ViewTypeExpected& h_expected, const std::string& situation) {
+#ifndef NDEBUG
   Kokkos::printf(
       "In Test_Blas2_ger.hpp, right before calling KokkosBlas::ger(): "
-      "ViewTypeA = %s, _kkGerShouldThrowException=%d\n",
-      typeid(_ViewTypeA).name(), _kkGerShouldThrowException);
+      "ViewTypeA = %s, m_kkGerShouldThrowException=%d\n",
+      typeid(ViewTypeA).name(), m_kkGerShouldThrowException);
 #endif
-  std::string mode = _useHermitianOption ? "H" : "T";
+  std::string mode = m_useHermitianOption ? "H" : "T";
   bool gotStdException(false);
   bool gotUnknownException(false);
   try {
     KokkosBlas::ger(mode.c_str(), alpha, x, y, A.d_view);
   } catch (const std::exception& e) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
     std::cout << "In Test_Blas2_ger, '" << situation << "': caught exception, e.what() = " << e.what() << std::endl;
 #endif
     gotStdException = true;
   } catch (...) {
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
     std::cout << "In Test_Blas2_ger, '" << situation << "': caught unknown exception" << std::endl;
 #endif
     gotUnknownException = true;
@@ -1164,8 +1142,8 @@ void GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>:
   EXPECT_EQ(gotUnknownException, false) << "Failed test, '" << situation
                                         << "': unknown exception should not have happened";
 
-  EXPECT_EQ(gotStdException, _kkGerShouldThrowException)
-      << "Failed test, '" << situation << "': kk ger() should" << (_kkGerShouldThrowException ? " " : " not ")
+  EXPECT_EQ(gotStdException, m_kkGerShouldThrowException)
+      << "Failed test, '" << situation << "': kk ger() should" << (m_kkGerShouldThrowException ? " " : " not ")
       << "have thrown a std::exception";
 
   if ((gotStdException == false) && (gotUnknownException == false)) {
@@ -1178,7 +1156,7 @@ void GerTester<ScalarX, tLayoutX, ScalarY, tLayoutY, ScalarA, tLayoutA, Device>:
 }  // namespace Test
 
 template <class ScalarX, class ScalarY, class ScalarA, class Device>
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
 int test_ger(const std::string& caseName) {
   Kokkos::printf(
       "+======================================================================="
@@ -1200,7 +1178,7 @@ int test_ger(const std::string& /*caseName*/) {
 
 #if defined(KOKKOSKERNELS_INST_LAYOUTLEFT) || \
     (!defined(KOKKOSKERNELS_ETI_ONLY) && !defined(KOKKOSKERNELS_IMPL_CHECK_ETI_CALLS))
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
   Kokkos::printf(
       "+-----------------------------------------------------------------------"
       "---\n");
@@ -1233,7 +1211,7 @@ int test_ger(const std::string& /*caseName*/) {
     }
   }
 
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
   Kokkos::printf("Finished %s for LAYOUTLEFT\n", caseName.c_str());
   Kokkos::printf(
       "+-----------------------------------------------------------------------"
@@ -1243,7 +1221,7 @@ int test_ger(const std::string& /*caseName*/) {
 
 #if defined(KOKKOSKERNELS_INST_LAYOUTRIGHT) || \
     (!defined(KOKKOSKERNELS_ETI_ONLY) && !defined(KOKKOSKERNELS_IMPL_CHECK_ETI_CALLS))
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
   Kokkos::printf(
       "+-----------------------------------------------------------------------"
       "---\n");
@@ -1276,7 +1254,7 @@ int test_ger(const std::string& /*caseName*/) {
     }
   }
 
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
   Kokkos::printf("Finished %s for LAYOUTRIGHT\n", caseName.c_str());
   Kokkos::printf(
       "+-----------------------------------------------------------------------"
@@ -1285,7 +1263,7 @@ int test_ger(const std::string& /*caseName*/) {
 #endif
 
 #if (!defined(KOKKOSKERNELS_ETI_ONLY) && !defined(KOKKOSKERNELS_IMPL_CHECK_ETI_CALLS))
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
   Kokkos::printf(
       "+-----------------------------------------------------------------------"
       "---\n");
@@ -1315,7 +1293,7 @@ int test_ger(const std::string& /*caseName*/) {
     }
   }
 
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
   Kokkos::printf("Finished %s for LAYOUTSTRIDE\n", caseName.c_str());
   Kokkos::printf(
       "+-----------------------------------------------------------------------"
@@ -1324,7 +1302,7 @@ int test_ger(const std::string& /*caseName*/) {
 #endif
 
 #if !defined(KOKKOSKERNELS_ETI_ONLY) && !defined(KOKKOSKERNELS_IMPL_CHECK_ETI_CALLS)
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
   Kokkos::printf(
       "+-----------------------------------------------------------------------"
       "---\n");
@@ -1348,7 +1326,7 @@ int test_ger(const std::string& /*caseName*/) {
     tester.test(1024, 1024, 0);
   }
 
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
   Kokkos::printf("Finished %s for MIXED LAYOUTS\n", caseName.c_str());
   Kokkos::printf(
       "+-----------------------------------------------------------------------"
@@ -1356,7 +1334,7 @@ int test_ger(const std::string& /*caseName*/) {
 #endif
 #endif
 
-#ifdef HAVE_KOKKOSKERNELS_DEBUG
+#ifndef NDEBUG
   Kokkos::printf("Finished %s\n", caseName.c_str());
   Kokkos::printf(
       "+======================================================================="

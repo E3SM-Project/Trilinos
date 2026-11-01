@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #include <gtest/gtest.h>
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Random.hpp>
@@ -20,6 +7,7 @@
 #include <KokkosKernels_TestUtils.hpp>
 
 #include <chrono>
+#include <iostream>
 
 namespace Test {
 
@@ -34,7 +22,7 @@ struct gemm_VanillaGEMM {
   typedef typename ViewTypeA::value_type ScalarA;
   typedef typename ViewTypeB::value_type ScalarB;
   typedef typename ViewTypeC::value_type ScalarC;
-  typedef Kokkos::ArithTraits<ScalarC> APT;
+  typedef KokkosKernels::ArithTraits<ScalarC> APT;
   typedef typename APT::mag_type mag_type;
   ScalarA alpha;
   ScalarC beta;
@@ -128,7 +116,7 @@ struct DiffGEMM {
   ViewTypeC C, C2;
 
   typedef typename ViewTypeC::value_type ScalarC;
-  typedef Kokkos::ArithTraits<ScalarC> APT;
+  typedef KokkosKernels::ArithTraits<ScalarC> APT;
   typedef typename APT::mag_type mag_type;
 
   KOKKOS_INLINE_FUNCTION
@@ -160,7 +148,7 @@ void impl_test_gemm(const char* TA, const char* TB, int M, int N, int K, typenam
   typedef typename ViewTypeA::value_type ScalarA;
   typedef typename ViewTypeB::value_type ScalarB;
   typedef typename ViewTypeC::value_type ScalarC;
-  typedef Kokkos::ArithTraits<ScalarC> APT;
+  typedef KokkosKernels::ArithTraits<ScalarC> APT;
   typedef typename APT::mag_type mag_type;
 
   double machine_eps = APT::epsilon();
@@ -239,7 +227,7 @@ void impl_test_stream_gemm_psge2(const int M, const int N, const int K, const Sc
   using ViewTypeB       = Kokkos::View<Scalar**, Layout, Device>;
   using ViewTypeC       = Kokkos::View<Scalar**, Layout, Device>;
   using ScalarC         = typename ViewTypeC::value_type;
-  using APT             = Kokkos::ArithTraits<ScalarC>;
+  using APT             = KokkosKernels::ArithTraits<ScalarC>;
   using mag_type        = typename APT::mag_type;
 
   const char tA[]          = {"N"};
@@ -301,6 +289,38 @@ void impl_test_stream_gemm_psge2(const int M, const int N, const int K, const Sc
     EXPECT_TRUE((diff_C2_average < 1.05 * diff_C_expected));
   }
 }
+
+template <class ExecutionSpace, class MatrixA, class MatrixB, class MatrixC>
+void gemm_alpha_bypass(const char* TA, const char* TB, typename MatrixC::value_type beta) {
+  using KAT        = KokkosKernels::ArithTraits<typename MatrixA::value_type>;
+  const auto alpha = KAT::zero();
+  const auto two   = KAT::one() + KAT::one();
+
+  MatrixA A("A", 2, 2);
+  MatrixB B("B", 2, 2);
+  MatrixC C("C", 2, 2);
+
+  Kokkos::deep_copy(A, KAT::max());
+  Kokkos::deep_copy(B, two);
+  Kokkos::deep_copy(C, two);
+
+  KokkosBlas::gemm(TA, TB, alpha, A, B, beta, C);
+
+  auto C_h = Kokkos::create_mirror_view(C);
+  Kokkos::deep_copy(C_h, C);
+
+  bool check_flag = true;
+  for (int rowIdx = 0; rowIdx < C.extent_int(0); ++rowIdx) {
+    for (int colIdx = 0; colIdx < C.extent_int(1); ++colIdx) {
+      if (Kokkos::abs(C_h(rowIdx, colIdx) - beta * two) > 10 * Kokkos::abs(beta * two * KAT::eps())) {
+        check_flag = false;
+        std::cout << "C(" << rowIdx << ", " << colIdx << ")=" << C_h(rowIdx, colIdx) << " instead of " << beta * two
+                  << std::endl;
+      }
+    }
+  }
+  EXPECT_TRUE(check_flag == true);
+}
 }  // namespace Test
 
 template <typename Scalar, typename Layout>
@@ -328,6 +348,7 @@ void test_gemm() {
                                                                                 beta);
         Test::impl_test_gemm<view_type_a, view_type_b, view_type_c, TestDevice>(amode, bmode, 12, 3071, 517, alpha,
                                                                                 beta);
+        Test::gemm_alpha_bypass<execution_space, view_type_a, view_type_b, view_type_c>(amode, bmode, beta);
       }
     }
   }
@@ -365,9 +386,9 @@ void test_gemm_mixed_scalars() {
   Matrix1 C("C", dim2, dim1);
   Matrix2 D("D", dim2, dim1);
 
-  Kokkos::deep_copy(A, Kokkos::ArithTraits<scalar1>::one());
-  Kokkos::deep_copy(B, Kokkos::ArithTraits<scalar1>::one());
-  Kokkos::deep_copy(C, Kokkos::ArithTraits<scalar1>::one());
+  Kokkos::deep_copy(A, KokkosKernels::ArithTraits<scalar1>::one());
+  Kokkos::deep_copy(B, KokkosKernels::ArithTraits<scalar1>::one());
+  Kokkos::deep_copy(C, KokkosKernels::ArithTraits<scalar1>::one());
 
   KokkosBlas::gemm(TestDevice(), "N", "N", 1.0, D, A, 0.0, C);
   KokkosBlas::gemm(TestDevice(), "N", "T", 1.0, C, D, 0.0, B);
@@ -394,18 +415,36 @@ TEST_F(TestCategory, gemm_double) {
 #if defined(KOKKOSKERNELS_INST_COMPLEX_DOUBLE) || \
     (!defined(KOKKOSKERNELS_ETI_ONLY) && !defined(KOKKOSKERNELS_IMPL_CHECK_ETI_CALLS))
 TEST_F(TestCategory, gemm_complex_double) {
-  Kokkos::Profiling::pushRegion("KokkosBlas::Test::gemm_complex_double");
-  test_gemm_enabled_layouts<Kokkos::complex<double>>();
-  Kokkos::Profiling::popRegion();
+#if defined(KOKKOS_ENABLE_SYCL)
+  constexpr bool skip_complex = std::is_same_v<typename TestDevice::execution_space, Kokkos::SYCL>;
+#else
+  constexpr bool skip_complex = false;
+#endif
+  if constexpr (skip_complex) {
+    GTEST_SKIP();
+  } else {
+    Kokkos::Profiling::pushRegion("KokkosBlas::Test::gemm_complex_double");
+    test_gemm_enabled_layouts<Kokkos::complex<double>>();
+    Kokkos::Profiling::popRegion();
+  }
 }
 #endif
 
 #if defined(KOKKOSKERNELS_INST_COMPLEX_FLOAT) || \
     (!defined(KOKKOSKERNELS_ETI_ONLY) && !defined(KOKKOSKERNELS_IMPL_CHECK_ETI_CALLS))
 TEST_F(TestCategory, gemm_complex_float) {
-  Kokkos::Profiling::pushRegion("KokkosBlas::Test::gemm_complex_float");
-  test_gemm_enabled_layouts<Kokkos::complex<float>>();
-  Kokkos::Profiling::popRegion();
+#if defined(KOKKOS_ENABLE_SYCL)
+  constexpr bool skip_complex = std::is_same_v<typename TestDevice::execution_space, Kokkos::SYCL>;
+#else
+  constexpr bool skip_complex = false;
+#endif
+  if constexpr (skip_complex) {
+    GTEST_SKIP();
+  } else {
+    Kokkos::Profiling::pushRegion("KokkosBlas::Test::gemm_complex_float");
+    test_gemm_enabled_layouts<Kokkos::complex<float>>();
+    Kokkos::Profiling::popRegion();
+  }
 }
 #endif
 

@@ -1,21 +1,8 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
-#ifndef _KOKKOSKERNELS_SPARSEUTILS_ROCSPARSE_HPP
-#define _KOKKOSKERNELS_SPARSEUTILS_ROCSPARSE_HPP
+#ifndef KOKKOSKERNELS_SPARSEUTILS_ROCSPARSE_HPP
+#define KOKKOSKERNELS_SPARSEUTILS_ROCSPARSE_HPP
 
 #include <type_traits>
 #include <sstream>
@@ -100,9 +87,13 @@ inline rocsparse_operation mode_kk_to_rocsparse(const char kk_mode[]) {
 
 template <typename index_type>
 inline rocsparse_indextype rocsparse_index_type() {
+#if defined(HIP_VERSION) && HIP_VERSION <= 70140000
   if (std::is_same<index_type, uint16_t>::value) {
     return rocsparse_indextype_u16;
   } else if (std::is_same<index_type, int32_t>::value) {
+#else
+  if (std::is_same<index_type, int32_t>::value) {
+#endif
     return rocsparse_indextype_i32;
   } else if (std::is_same<index_type, int64_t>::value) {
     return rocsparse_indextype_i64;
@@ -181,5 +172,5 @@ struct TemporarySetRocsparseStream {
 
 }  // namespace KokkosSparse
 
-#endif  // KOKKOSKERNELS_ENABLE_TPL_CUSPARSE
-#endif  // _KOKKOSKERNELS_SPARSEUTILS_CUSPARSE_HPP
+#endif  // KOKKOSKERNELS_ENABLE_TPL_ROCSPARSE
+#endif  // KOKKOSKERNELS_SPARSEUTILS_ROCSPARSE_HPP

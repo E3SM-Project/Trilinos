@@ -1,20 +1,5 @@
-/*
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
-*/
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOSPARSE_SPGEMM_NOREUSE_TPL_SPEC_AVAIL_HPP_
 #define KOKKOSPARSE_SPGEMM_NOREUSE_TPL_SPEC_AVAIL_HPP_
@@ -56,6 +41,26 @@ SPGEMM_NOREUSE_AVAIL_CUSPARSE_S(float)
 SPGEMM_NOREUSE_AVAIL_CUSPARSE_S(double)
 SPGEMM_NOREUSE_AVAIL_CUSPARSE_S(Kokkos::complex<float>)
 SPGEMM_NOREUSE_AVAIL_CUSPARSE_S(Kokkos::complex<double>)
+
+#endif
+
+#ifdef KOKKOSKERNELS_ENABLE_TPL_ROCSPARSE
+
+#define SPGEMM_NOREUSE_AVAIL_ROCSPARSE(SCALAR)                                                        \
+  template <>                                                                                         \
+  struct spgemm_noreuse_tpl_spec_avail<                                                               \
+      KokkosSparse::CrsMatrix<SCALAR, int, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>, void, int>, \
+      KokkosSparse::CrsMatrix<const SCALAR, const int, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>, \
+                              Kokkos::MemoryTraits<Kokkos::Unmanaged>, const int>,                    \
+      KokkosSparse::CrsMatrix<const SCALAR, const int, Kokkos::Device<Kokkos::HIP, Kokkos::HIPSpace>, \
+                              Kokkos::MemoryTraits<Kokkos::Unmanaged>, const int>> {                  \
+    enum : bool { value = true };                                                                     \
+  };
+
+SPGEMM_NOREUSE_AVAIL_ROCSPARSE(float)
+SPGEMM_NOREUSE_AVAIL_ROCSPARSE(double)
+SPGEMM_NOREUSE_AVAIL_ROCSPARSE(Kokkos::complex<float>)
+SPGEMM_NOREUSE_AVAIL_ROCSPARSE(Kokkos::complex<double>)
 
 #endif
 
