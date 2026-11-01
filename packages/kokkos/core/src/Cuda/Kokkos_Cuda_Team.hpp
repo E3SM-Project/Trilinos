@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_CUDA_TEAM_HPP
 #define KOKKOS_CUDA_TEAM_HPP
@@ -33,6 +20,7 @@
 #include <Kokkos_Vectorization.hpp>
 
 #include <impl/Kokkos_Tools.hpp>
+#include <type_traits>
 #include <typeinfo>
 
 //----------------------------------------------------------------------------
@@ -51,29 +39,76 @@ struct CudaJoinFunctor {
   }
 };
 
-/**\brief  Team member_type passed to TeamPolicy or TeamTask closures.
+/// \brief Warp lane mask of the vector that holds team thread vector_index.
+///
+/// Tuned for ThreadVectorRange collectives: vector reductions and scans,
+/// single(PerThread) broadcasts, and cuda_team_vector_barrier(). The mask
+/// names exactly the vector_length lanes of one team thread, so it is not
+/// valid for TeamThreadRange or TeamVectorRange collectives, which span
+/// several vectors or warps.
+///
+/// Cuda team closures run with blockDim = (vector_length, team_size, 1), so
+/// the vector lanes of each team thread are vector_length consecutive lanes:
+/// \code
+///   vector_length                       : the size of the vector, blockDim.x
+///   0xffffffffu >> (32 - vector_length) : vector_length bits set to 1; unlike
+///                                       : ((1 << vector_length) - 1) this is
+///                                       : also defined for vector_length 32
+///   vector_index                        : my thread ID in the team,
+///                                       : threadIdx.y (not a lane's
+///                                       : threadIdx.x)
+///   (vector_index * vector_length) & 31 : the first lane of my vector in the
+///                                       : warp, e.g. if vector_length is 8,
+///                                       : there are 4 vectors in a warp and
+///                                       : thread 6 starts at lane
+///                                       : (6 * 8) & 31 = 16
+/// \endcode
+///
+/// Requires vector_length to be a power of two in [1, 32];
+/// TeamPolicyInternal<Cuda>::impl_determine_vector_length rounds requests
+/// down to one. Then vector_length divides the warp size, no vector straddles
+/// a warp, and the first lane equals
+/// (vector_index % (32 / vector_length)) * vector_length without the integer
+/// division and modulo. Other vector lengths are not supported.
+KOKKOS_INLINE_FUNCTION
+unsigned cuda_team_vector_mask(unsigned vector_length, unsigned vector_index) {
+  return (0xffffffffu >> (32u - vector_length))
+         << ((vector_index * vector_length) & 31u);
+}
+
+/// \brief Synchronize the vector lanes of the calling team thread.
+///
+/// __syncwarp over cuda_team_vector_mask(blockDim.x, threadIdx.y): waits until
+/// every lane of the calling thread's vector arrives, and orders the memory
+/// accesses of those lanes. Used at the end of parallel_for(ThreadVectorRange)
+/// and of single(PerThread) and single(PerTeam).
+///
+/// This is a vector barrier only. Other vectors in the same warp are not
+/// synchronized; use team_barrier() for the whole team. Every lane of the
+/// vector must reach the call. Same layout and power-of-two blockDim.x
+/// requirements as cuda_team_vector_mask.
+KOKKOS_INLINE_FUNCTION
+void cuda_team_vector_barrier() {
+  // Keep the full-warp mask literal so the compiler can specialize this path.
+  KOKKOS_IF_ON_DEVICE((
+      if (blockDim.x == 32u) { __syncwarp(0xffffffffu); } else {
+        __syncwarp(cuda_team_vector_mask(blockDim.x, threadIdx.y));
+      }))
+}
+
+/**\brief  Team member_type passed to the TeamPolicy closure.
  *
  *  Cuda thread blocks for team closures are dimensioned as:
  *    blockDim.x == number of "vector lanes" per "thread"
  *    blockDim.y == number of "threads" per team
- *    blockDim.z == number of teams in a block
- *  where
- *    A set of teams exactly fill a warp OR a team is the whole block
- *      ( 0 == WarpSize % ( blockDim.x * blockDim.y ) )
- *      OR
- *      ( 1 == blockDim.z )
- *
- *  Thus when 1 < blockDim.z the team is warp-synchronous
- *  and __syncthreads should not be called in team collectives.
- *
- *  When multiple teams are mapped onto a single block then the
- *  total available shared memory must be partitioned among teams.
+ *    blockDim.z == 1
  */
 class CudaTeamMember {
  public:
   using execution_space      = Kokkos::Cuda;
   using scratch_memory_space = execution_space::scratch_memory_space;
   using team_handle          = CudaTeamMember;
+  using thread_handle        = ThreadHandleType<team_handle>;
 
  private:
   mutable void* m_team_reduce;
@@ -113,10 +148,7 @@ class CudaTeamMember {
   }
 
   KOKKOS_INLINE_FUNCTION void team_barrier() const {
-    KOKKOS_IF_ON_DEVICE((
-        if (1 == blockDim.z) { __syncthreads(); }  // team == block
-        else { __threadfence_block(); }            // team <= warp
-        ))
+    KOKKOS_IF_ON_DEVICE((__syncthreads();))
   }
 
   //--------------------------------------------------------------------------
@@ -127,20 +159,14 @@ class CudaTeamMember {
     (void)val;
     (void)thread_id;
     KOKKOS_IF_ON_DEVICE((
-        if (1 == blockDim.z) {  // team == block
-          __syncthreads();
-          // Wait for shared data write until all threads arrive here
-          if (threadIdx.x == 0u && threadIdx.y == (uint32_t)thread_id) {
-            *((ValueType*)m_team_reduce) = val;
-          }
-          __syncthreads();  // Wait for shared data read until root thread
-                            // writes
-          val = *((ValueType*)m_team_reduce);
-        } else {               // team <= warp
-          ValueType tmp(val);  // input might not be a register variable
-          Impl::in_place_shfl(val, tmp, blockDim.x * thread_id,
-                              blockDim.x * blockDim.y);
-        }))
+        // Wait for shared data write until all threads arrive here
+        __syncthreads();
+        if (threadIdx.x == 0u && threadIdx.y == (uint32_t)thread_id) {
+          *((ValueType*)m_team_reduce) = val;
+        }
+        // Wait for shared data read until root thread writes
+        __syncthreads();
+        val = *((ValueType*)m_team_reduce);))
   }
 
   template <class Closure, class ValueType>
@@ -149,23 +175,16 @@ class CudaTeamMember {
     (void)f;
     (void)val;
     (void)thread_id;
-    KOKKOS_IF_ON_DEVICE((
-        f(val);
-
-        if (1 == blockDim.z) {  // team == block
-          __syncthreads();
-          // Wait for shared data write until all threads arrive here
-          if (threadIdx.x == 0u && threadIdx.y == (uint32_t)thread_id) {
-            *((ValueType*)m_team_reduce) = val;
-          }
-          __syncthreads();  // Wait for shared data read until root thread
-                            // writes
-          val = *((ValueType*)m_team_reduce);
-        } else {               // team <= warp
-          ValueType tmp(val);  // input might not be a register variable
-          Impl::in_place_shfl(val, tmp, blockDim.x * thread_id,
-                              blockDim.x * blockDim.y);
-        }))
+    KOKKOS_IF_ON_DEVICE(
+        (f(val);
+         // Wait for shared data write until all threads arrive here
+         __syncthreads();
+         if (threadIdx.x == 0u && threadIdx.y == (uint32_t)thread_id) {
+           *((ValueType*)m_team_reduce) = val;
+         }
+         // Wait for shared data read until root thread writes
+         __syncthreads();
+         val = *((ValueType*)m_team_reduce);))
   }
 
   //--------------------------------------------------------------------------
@@ -174,14 +193,11 @@ class CudaTeamMember {
    *  Mapping of teams onto blocks:
    *    blockDim.x  is "vector lanes"
    *    blockDim.y  is team "threads"
-   *    blockDim.z  is number of teams per block
+   *    blockDim.z  is 1
    *
    *  Requires:
    *    blockDim.x is power two
    *    blockDim.x <= CudaTraits::WarpSize
-   *    ( 0 == CudaTraits::WarpSize % ( blockDim.x * blockDim.y )
-   *      OR
-   *    ( 1 == blockDim.z )
    */
   template <typename ReducerType>
   KOKKOS_INLINE_FUNCTION std::enable_if_t<is_reducer_v<ReducerType>>
@@ -310,11 +326,7 @@ class CudaTeamMember {
          typename WrappedReducerType::value_type tmp(value);
          typename WrappedReducerType::value_type tmp2 = tmp;
 
-         unsigned mask =
-             blockDim.x == 32
-                 ? 0xffffffff
-                 : ((1 << blockDim.x) - 1)
-                       << ((threadIdx.y % (32 / blockDim.x)) * blockDim.x);
+         unsigned mask = Impl::cuda_team_vector_mask(blockDim.x, threadIdx.y);
 
          for (int i = blockDim.x; (i >>= 1);) {
            Impl::in_place_shfl_down(tmp2, tmp, i, blockDim.x, mask);
@@ -373,13 +385,14 @@ struct TeamThreadRangeBoundariesStruct<iType, CudaTeamMember> {
   const iType end;
 
   KOKKOS_INLINE_FUNCTION
-  TeamThreadRangeBoundariesStruct(const CudaTeamMember& thread_, iType count)
-      : member(thread_), start(0), end(count) {}
+  TeamThreadRangeBoundariesStruct(const CudaTeamMember& arg_thread,
+                                  iType arg_count)
+      : member(arg_thread), start(0), end(arg_count) {}
 
   KOKKOS_INLINE_FUNCTION
-  TeamThreadRangeBoundariesStruct(const CudaTeamMember& thread_, iType begin_,
-                                  iType end_)
-      : member(thread_), start(begin_), end(end_) {}
+  TeamThreadRangeBoundariesStruct(const CudaTeamMember& arg_thread,
+                                  iType arg_begin, iType arg_end)
+      : member(arg_thread), start(arg_begin), end(arg_end) {}
 };
 
 template <typename iType>
@@ -390,14 +403,14 @@ struct TeamVectorRangeBoundariesStruct<iType, CudaTeamMember> {
   const iType end;
 
   KOKKOS_INLINE_FUNCTION
-  TeamVectorRangeBoundariesStruct(const CudaTeamMember& thread_,
-                                  const iType& count)
-      : member(thread_), start(0), end(count) {}
+  TeamVectorRangeBoundariesStruct(const CudaTeamMember& arg_thread,
+                                  const iType& arg_count)
+      : member(arg_thread), start(0), end(arg_count) {}
 
   KOKKOS_INLINE_FUNCTION
-  TeamVectorRangeBoundariesStruct(const CudaTeamMember& thread_,
-                                  const iType& begin_, const iType& end_)
-      : member(thread_), start(begin_), end(end_) {}
+  TeamVectorRangeBoundariesStruct(const CudaTeamMember& arg_thread,
+                                  const iType& arg_begin, const iType& arg_end)
+      : member(arg_thread), start(arg_begin), end(arg_end) {}
 };
 
 template <typename iType>
@@ -407,8 +420,8 @@ struct ThreadVectorRangeBoundariesStruct<iType, CudaTeamMember> {
   const index_type end;
 
   KOKKOS_INLINE_FUNCTION
-  ThreadVectorRangeBoundariesStruct(const CudaTeamMember, index_type count)
-      : start(static_cast<index_type>(0)), end(count) {}
+  ThreadVectorRangeBoundariesStruct(const CudaTeamMember, index_type arg_count)
+      : start(static_cast<index_type>(0)), end(arg_count) {}
 
   KOKKOS_INLINE_FUNCTION
   ThreadVectorRangeBoundariesStruct(const CudaTeamMember, index_type arg_begin,
@@ -490,6 +503,8 @@ Impl::VectorSingleStruct<Impl::CudaTeamMember> PerThread(
  *  Executes closure(iType i) for each i=[0..N).
  *
  * The range [0..N) is mapped to all threads of the the calling thread team.
+ * If the closure accepts (thread_handle, iType), the thread handle is passed
+ * so the body can use the vector lanes.
  */
 template <typename iType, class Closure>
 KOKKOS_INLINE_FUNCTION void parallel_for(
@@ -498,9 +513,22 @@ KOKKOS_INLINE_FUNCTION void parallel_for(
     const Closure& closure) {
   (void)loop_boundaries;
   (void)closure;
-  KOKKOS_IF_ON_DEVICE(
-      (for (iType i = loop_boundaries.start + threadIdx.y;
-            i < loop_boundaries.end; i += blockDim.y) { closure(i); }))
+  KOKKOS_IF_ON_DEVICE((
+      using thread_handle_t = Impl::ThreadHandleType<Impl::CudaTeamMember>;
+
+      for (iType i = loop_boundaries.start + threadIdx.y;
+           i < loop_boundaries.end; i += blockDim.y) {
+        if constexpr (std::is_invocable_v<Closure, iType>) {
+          closure(i);
+        } else if constexpr (std::is_invocable_v<
+                                 Closure, thread_handle_t const&, iType>) {
+          closure(thread_handle_t(loop_boundaries.member), i);
+        } else {
+          static_assert(Kokkos::Impl::always_false<Closure>::value,
+                        "Kokkos::parallel_for(TeamThreadRange) closure must be "
+                        "invocable with (iType) or (ThreadHandleType, iType)");
+        }
+      }))
 }
 
 //----------------------------------------------------------------------------
@@ -674,10 +702,11 @@ KOKKOS_INLINE_FUNCTION void parallel_for(
       for (iType i = loop_boundaries.start + threadIdx.x;
            i < loop_boundaries.end; i += blockDim.x) { closure(i); }
 
-      __syncwarp(blockDim.x == 32
-                     ? 0xffffffff
-                     : ((1 << blockDim.x) - 1)
-                           << (threadIdx.y % (32 / blockDim.x)) * blockDim.x);))
+      // Sync up all the threads that were in the vector
+      // * Everyone in the vector is actually done when the parallel_for returns
+      // * Any memory modifications made within the lambda are visible to other
+      // threads in the warp
+      Impl::cuda_team_vector_barrier();))
 }
 
 //----------------------------------------------------------------------------
@@ -776,7 +805,7 @@ parallel_reduce(Impl::ThreadVectorRangeBoundariesStruct<
  *  less than N) and a scan operation is performed. The last call to closure has
  *  final == true.
  */
-// This is the same code as in HIP and largely the same as in OpenMPTarget
+// This is the same code as in HIP.
 template <typename iType, typename FunctorType, typename ValueType>
 KOKKOS_INLINE_FUNCTION void parallel_scan(
     const Impl::TeamThreadRangeBoundariesStruct<iType, Impl::CudaTeamMember>&
@@ -786,7 +815,7 @@ KOKKOS_INLINE_FUNCTION void parallel_scan(
   using functor_value_type = typename Kokkos::Impl::FunctorAnalysis<
       Kokkos::Impl::FunctorPatternInterface::SCAN, void, FunctorType,
       void>::value_type;
-  static_assert(std::is_same<functor_value_type, ValueType>::value,
+  static_assert(std::is_same_v<functor_value_type, ValueType>,
                 "Non-matching value types of functor and return type");
 
   const auto start     = loop_bounds.start;
@@ -806,7 +835,7 @@ KOKKOS_INLINE_FUNCTION void parallel_scan(
     // perform team scan
     local_accum = member.team_scan(local_accum);
     // add this blocks accum to total accumulation
-    auto val = accum + local_accum;
+    ValueType val = accum + local_accum;
     // user updates their data with total accumulation
     if (ii < loop_bounds.end) lambda(ii, val, true);
     // the last value needs to be propogated to next chunk
@@ -879,14 +908,13 @@ parallel_scan(const Impl::ThreadVectorRangeBoundariesStruct<
 
       const int mask = blockDim.x - 1;
       const unsigned active_mask =
-          blockDim.x == 32
-              ? 0xffffffff
-              : ((1 << blockDim.x) - 1)
-                    << (threadIdx.y % (32 / blockDim.x)) * blockDim.x;
-      const int rem = loop_boundaries.end & mask;  // == end % blockDim.x
-      const int end = loop_boundaries.end + (rem ? blockDim.x - rem : 0);
+          Impl::cuda_team_vector_mask(blockDim.x, threadIdx.y);
+      const iType rem = (loop_boundaries.end - loop_boundaries.start) &
+                        mask;  // == (end - start) % blockDim.x
+      const iType end = loop_boundaries.end + (rem ? blockDim.x - rem : 0);
 
-      for (int i = threadIdx.x; i < end; i += blockDim.x) {
+      for (iType i = loop_boundaries.start + threadIdx.x; i < end;
+           i += blockDim.x) {
         value_type val = identity;
 
         // First acquire per-lane contributions.
@@ -971,7 +999,7 @@ KOKKOS_INLINE_FUNCTION void parallel_scan(
   using closure_value_type = typename Kokkos::Impl::FunctorAnalysis<
       Kokkos::Impl::FunctorPatternInterface::SCAN, void, Closure,
       ValueType>::value_type;
-  static_assert(std::is_same<closure_value_type, ValueType>::value,
+  static_assert(std::is_same_v<closure_value_type, ValueType>,
                 "Non-matching value types of closure and return type");
 
   ValueType accum;
@@ -989,13 +1017,8 @@ KOKKOS_INLINE_FUNCTION void single(
     const Impl::VectorSingleStruct<Impl::CudaTeamMember>&,
     const FunctorType& lambda) {
   (void)lambda;
-  KOKKOS_IF_ON_DEVICE((
-      if (threadIdx.x == 0) { lambda(); }
-
-      __syncwarp(blockDim.x == 32
-                     ? 0xffffffff
-                     : ((1 << blockDim.x) - 1)
-                           << (threadIdx.y % (32 / blockDim.x)) * blockDim.x);))
+  KOKKOS_IF_ON_DEVICE((if (threadIdx.x == 0) { lambda(); }))
+  Impl::cuda_team_vector_barrier();
 }
 
 template <class FunctorType>
@@ -1003,13 +1026,8 @@ KOKKOS_INLINE_FUNCTION void single(
     const Impl::ThreadSingleStruct<Impl::CudaTeamMember>&,
     const FunctorType& lambda) {
   (void)lambda;
-  KOKKOS_IF_ON_DEVICE((
-      if (threadIdx.x == 0 && threadIdx.y == 0) { lambda(); }
-
-      __syncwarp(blockDim.x == 32
-                     ? 0xffffffff
-                     : ((1 << blockDim.x) - 1)
-                           << (threadIdx.y % (32 / blockDim.x)) * blockDim.x);))
+  KOKKOS_IF_ON_DEVICE((if (threadIdx.x == 0 && threadIdx.y == 0) { lambda(); }))
+  Impl::cuda_team_vector_barrier();
 }
 
 template <class FunctorType, class ValueType>
@@ -1018,16 +1036,12 @@ KOKKOS_INLINE_FUNCTION void single(
     const FunctorType& lambda, ValueType& val) {
   (void)lambda;
   (void)val;
-  KOKKOS_IF_ON_DEVICE(
-      (if (threadIdx.x == 0) { lambda(val); }
+  KOKKOS_IF_ON_DEVICE((if (threadIdx.x == 0) { lambda(val); }
 
-       unsigned mask =
-           blockDim.x == 32
-               ? 0xffffffff
-               : ((1 << blockDim.x) - 1)
-                     << ((threadIdx.y % (32 / blockDim.x)) * blockDim.x);
+                       unsigned mask =
+                           Impl::cuda_team_vector_mask(blockDim.x, threadIdx.y);
 
-       Impl::in_place_shfl(val, val, 0, blockDim.x, mask);))
+                       Impl::in_place_shfl(val, val, 0, blockDim.x, mask);))
 }
 
 template <class FunctorType, class ValueType>

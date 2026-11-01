@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_CORE_IMPL_UTILITIES_HPP
 #define KOKKOS_CORE_IMPL_UTILITIES_HPP
@@ -56,40 +43,39 @@ struct always_false : std::false_type {};
 
 //==============================================================================
 
-#if defined(__cpp_lib_type_identity)
-// since C++20
-using std::type_identity;
-using std::type_identity_t;
-#else
-template <typename T>
-struct type_identity {
-  using type = T;
-};
-
-template <typename T>
-using type_identity_t = typename type_identity<T>::type;
-#endif
-
-#if defined(__cpp_lib_remove_cvref)
-// since C++20
-using std::remove_cvref;
-using std::remove_cvref_t;
-#else
-template <class T>
-struct remove_cvref {
-  using type = std::remove_cv_t<std::remove_reference_t<T>>;
-};
-
-template <class T>
-using remove_cvref_t = typename remove_cvref<T>::type;
-#endif
-
 // same as C++23 std::to_underlying but with __host__ __device__ annotations
 template <typename E>
 KOKKOS_FUNCTION constexpr std::underlying_type_t<E> to_underlying(
     E e) noexcept {
   return static_cast<std::underlying_type_t<E>>(e);
 }
+
+#if defined(__cpp_lib_forward_like)
+// since C++23
+using std::forward_like;
+#else
+// The implementation is taken from section 4 of P2445R1, see
+// https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2022/p2445r1.pdf.
+namespace ForwardLikeHelper {
+template <typename T, typename U>
+using override_ref_t = std::conditional_t<std::is_rvalue_reference_v<T>,
+                                          std::remove_reference_t<U> &&, U &>;
+
+template <typename T, typename U>
+using copy_const_t =
+    std::conditional_t<std::is_const_v<std::remove_reference_t<T>>, U const, U>;
+
+template <typename T, typename U>
+using forward_like_t =
+    override_ref_t<T &&, copy_const_t<T, std::remove_reference_t<U>>>;
+}  // namespace ForwardLikeHelper
+
+template <typename T>
+[[nodiscard]] constexpr auto forward_like(auto &&x) noexcept
+    -> ForwardLikeHelper::forward_like_t<T, decltype(x)> {
+  return static_cast<ForwardLikeHelper::forward_like_t<T, decltype(x)>>(x);
+}
+#endif
 
 #if defined(__cpp_lib_is_scoped_enum)
 // since C++23
@@ -119,6 +105,10 @@ struct is_specialization_of : std::false_type {};
 
 template <template <class...> class Template, class... Args>
 struct is_specialization_of<Template<Args...>, Template> : std::true_type {};
+
+template <typename T, template <typename...> class U>
+inline constexpr bool is_specialization_of_v =
+    is_specialization_of<T, U>::value;
 
 // </editor-fold> end is_specialization_of }}}1
 //==============================================================================
@@ -152,7 +142,7 @@ struct _type_list_remove_first_impl<Entry, type_list<Entry, Ts...>,
 
 template <class Entry, class... OutTs>
 struct _type_list_remove_first_impl<Entry, type_list<>, type_list<OutTs...>>
-    : type_identity<type_list<OutTs...>> {};
+    : std::type_identity<type_list<OutTs...>> {};
 
 template <class Entry, class List>
 struct type_list_remove_first
@@ -170,6 +160,9 @@ struct type_list_any;
 template <template <class> class UnaryPred, class... Ts>
 struct type_list_any<UnaryPred, type_list<Ts...>>
     : std::bool_constant<(UnaryPred<Ts>::value || ...)> {};
+
+template <template <class> class UnaryPred, class... Ts>
+constexpr bool type_list_any_v = type_list_any<UnaryPred, Ts...>::value;
 
 // </editor-fold> end type_list_any }}}2
 //------------------------------------------------------------------------------
@@ -194,8 +187,9 @@ struct concat_type_list<type_list<T...>> {
 
 // combine consecutive type_lists
 template <typename... T, typename... U, typename... Tail>
-struct concat_type_list<type_list<T...>, type_list<U...>, Tail...>
-    : concat_type_list<type_list<T..., U...>, Tail...> {};
+struct concat_type_list<type_list<T...>, type_list<U...>, Tail...> {
+  using type = concat_type_list_t<type_list<T..., U...>, Tail...>;
+};
 // </editor-fold> end concat_type_list }}}2
 //------------------------------------------------------------------------------
 
@@ -209,10 +203,16 @@ template <template <typename> class PredicateT, typename TypeListT,
 struct filter_type_list;
 
 template <template <typename> class PredicateT, typename... T, bool ValueT>
+  requires(sizeof...(T) > 0)
 struct filter_type_list<PredicateT, type_list<T...>, ValueT> {
   using type =
       concat_type_list_t<std::conditional_t<PredicateT<T>::value == ValueT,
                                             type_list<T>, type_list<>>...>;
+};
+
+template <template <typename> class PredicateT, bool ValueT>
+struct filter_type_list<PredicateT, type_list<>, ValueT> {
+  using type = type_list<>;
 };
 
 template <template <typename> class PredicateT, typename T, bool ValueT = true>
@@ -220,6 +220,36 @@ using filter_type_list_t =
     typename filter_type_list<PredicateT, T, ValueT>::type;
 
 // </editor-fold> end filter_type_list }}}2
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// <editor-fold desc="type_list_contains"> {{{2
+//  type_list_contains checks if a type is contained in the list.
+template <typename, typename...>
+struct type_list_contains;
+
+template <typename U, typename... Ts>
+struct type_list_contains<U, type_list<Ts...>>
+    : std::disjunction<std::is_same<U, Ts>...> {};
+
+template <typename U, typename... Ts>
+constexpr bool type_list_contains_v = type_list_contains<U, Ts...>::value;
+// </editor-fold> end type_list_contains }}}2
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// <editor-fold desc="type_list_size"> {{{2
+//  type_list_size returns the size of a type list.
+template <typename>
+struct type_list_size;
+
+template <typename... Ts>
+struct type_list_size<type_list<Ts...>>
+    : std::integral_constant<std::size_t, sizeof...(Ts)> {};
+
+template <typename T>
+constexpr std::size_t type_list_size_v = type_list_size<T>::value;
+// </editor-fold> end type_list_size }}}2
 //------------------------------------------------------------------------------
 
 // </editor-fold> end type_list }}}1

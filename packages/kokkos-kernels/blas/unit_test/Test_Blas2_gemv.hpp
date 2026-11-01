@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 #include <gtest/gtest.h>
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Random.hpp>
@@ -27,7 +14,7 @@ void impl_test_gemv_streams(ExecutionSpace& space, const char* mode, int M, int 
   typedef typename ViewTypeA::value_type ScalarA;
   typedef typename ViewTypeX::value_type ScalarX;
   typedef typename ViewTypeY::value_type ScalarY;
-  typedef Kokkos::ArithTraits<ScalarY> KAT_Y;
+  typedef KokkosKernels::ArithTraits<ScalarY> KAT_Y;
 
   const ScalarA alpha                = 3;
   ScalarY beta                       = 5;
@@ -43,10 +30,10 @@ void impl_test_gemv_streams(ExecutionSpace& space, const char* mode, int M, int 
     ldy = N;
   }
 
-  view_stride_adapter<ViewTypeA> A("A", M, N);
-  view_stride_adapter<ViewTypeX> x("X", ldx);
-  view_stride_adapter<ViewTypeY> y("Y", ldy);
-  view_stride_adapter<ViewTypeY> org_y("Org_Y", ldy);
+  TestUtils::view_stride_adapter<ViewTypeA> A("A", M, N);
+  TestUtils::view_stride_adapter<ViewTypeX> x("X", ldx);
+  TestUtils::view_stride_adapter<ViewTypeY> y("Y", ldy);
+  TestUtils::view_stride_adapter<ViewTypeY> org_y("Org_Y", ldy);
 
   Kokkos::Random_XorShift64_Pool<ExecutionSpace> rand_pool(13718);
 
@@ -55,17 +42,17 @@ void impl_test_gemv_streams(ExecutionSpace& space, const char* mode, int M, int 
   constexpr double max_valA = 1;
   {
     ScalarX randStart, randEnd;
-    Test::getRandomBounds(max_valX, randStart, randEnd);
+    TestUtils::getRandomBounds(max_valX, randStart, randEnd);
     Kokkos::fill_random(space, x.d_view, rand_pool, randStart, randEnd);
   }
   {
     ScalarY randStart, randEnd;
-    Test::getRandomBounds(max_valY, randStart, randEnd);
+    TestUtils::getRandomBounds(max_valY, randStart, randEnd);
     Kokkos::fill_random(space, y.d_view, rand_pool, randStart, randEnd);
   }
   {
     ScalarA randStart, randEnd;
-    Test::getRandomBounds(max_valA, randStart, randEnd);
+    TestUtils::getRandomBounds(max_valA, randStart, randEnd);
     Kokkos::fill_random(space, A.d_view, rand_pool, randStart, randEnd);
   }
 
@@ -238,17 +225,26 @@ TEST_F(TestCategory, gemv_double) {
 #if defined(KOKKOSKERNELS_INST_COMPLEX_DOUBLE) || \
     (!defined(KOKKOSKERNELS_ETI_ONLY) && !defined(KOKKOSKERNELS_IMPL_CHECK_ETI_CALLS))
 TEST_F(TestCategory, gemv_complex_double) {
-  Kokkos::Profiling::pushRegion("KokkosBlas::Test::gemv_complex_double");
-  test_gemv<Kokkos::complex<double>, Kokkos::complex<double>, Kokkos::complex<double>, TestDevice>("N");
-  Kokkos::Profiling::popRegion();
+#if defined(KOKKOS_ENABLE_SYCL)
+  constexpr bool skip_complex = std::is_same_v<typename TestDevice::execution_space, Kokkos::SYCL>;
+#else
+  constexpr bool skip_complex = false;
+#endif
+  if constexpr (skip_complex) {
+    GTEST_SKIP();
+  } else {
+    Kokkos::Profiling::pushRegion("KokkosBlas::Test::gemv_complex_double");
+    test_gemv<Kokkos::complex<double>, Kokkos::complex<double>, Kokkos::complex<double>, TestDevice>("N");
+    Kokkos::Profiling::popRegion();
 
-  Kokkos::Profiling::pushRegion("KokkosBlas::Test::gemv_tran_complex_double");
-  test_gemv<Kokkos::complex<double>, Kokkos::complex<double>, Kokkos::complex<double>, TestDevice>("T");
-  Kokkos::Profiling::popRegion();
+    Kokkos::Profiling::pushRegion("KokkosBlas::Test::gemv_tran_complex_double");
+    test_gemv<Kokkos::complex<double>, Kokkos::complex<double>, Kokkos::complex<double>, TestDevice>("T");
+    Kokkos::Profiling::popRegion();
 
-  Kokkos::Profiling::pushRegion("KokkosBlas::Test::gemv_conj_complex_double");
-  test_gemv<Kokkos::complex<double>, Kokkos::complex<double>, Kokkos::complex<double>, TestDevice>("C");
-  Kokkos::Profiling::popRegion();
+    Kokkos::Profiling::pushRegion("KokkosBlas::Test::gemv_conj_complex_double");
+    test_gemv<Kokkos::complex<double>, Kokkos::complex<double>, Kokkos::complex<double>, TestDevice>("C");
+    Kokkos::Profiling::popRegion();
+  }
 }
 #endif
 

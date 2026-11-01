@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_TEST_SUBVIEW_C13_HPP
 #define KOKKOS_TEST_SUBVIEW_C13_HPP
@@ -21,8 +8,37 @@
 namespace Test {
 
 TEST(TEST_CATEGORY, view_test_unmanaged_subview_reset) {
+#if defined(KOKKOS_ENABLE_OPENACC) && (KOKKOS_COMPILER_NVHPC > 240500) && \
+    (KOKKOS_COMPILER_NVHPC <= 260500)
+  // FIXME_OPENACC: compiling below is known to fail if 24.5 < NVHPC version
+  // <= 26.5.
+  // Error behavior: a device kernel accesses a undefined global
+  // symbol.
+  // Error message: parse use of undefined value '@_T1166_96704'
+  GTEST_SKIP() << "skipping since the OpenACC backend fails to comple this "
+                  "test if 24.5 < NVHPC version <= 26.5";
+#else
   TestViewSubview::test_unmanaged_subview_reset<TEST_EXECSPACE>();
+#endif
 }
+
+#if !defined(KOKKOS_ENABLE_CUDA) || defined(KOKKOS_ENABLE_CUDA_CONSTEXPR)
+TEST(TEST_CATEGORY, view_subview_std_pair_in_kernel) {
+#if defined(KOKKOS_ENABLE_OPENACC) && (KOKKOS_COMPILER_NVHPC > 240500) && \
+    (KOKKOS_COMPILER_NVHPC <= 260500)
+  // FIXME_OPENACC: compiling below is known to fail if 24.5 < NVHPC version
+  // <= 26.5.
+  // Error behavior: a device kernel accesses a undefined global
+  // symbol.
+  // Error message: parse use of undefined value '@_T1273_91533'
+  GTEST_SKIP() << "skipping since the OpenACC backend fails to comple this "
+                  "test if 24.5 < NVHPC version <= 26.5";
+#else
+  TEST_EXECSPACE::execution_space exec;
+  (void)TestViewSubview::TestSubviewStdPairInKernel(exec);
+#endif
+}
+#endif
 
 }  // namespace Test
 #endif

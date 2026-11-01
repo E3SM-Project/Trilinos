@@ -1,24 +1,16 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 // This file calls most of the basic Kokkos primitives. When combined with a
 // testing library this tests that our shared-library loading based profiling
 // mechanisms work
 
+#include <Kokkos_Macros.hpp>
+#ifdef KOKKOS_ENABLE_EXPERIMENTAL_CXX20_MODULES
+import kokkos.core;
+#else
 #include <Kokkos_Core.hpp>
+#endif
 #include <gtest/gtest.h>
 
 bool init_callback                               = false;
@@ -29,6 +21,8 @@ bool begin_parallel_reduce_callback              = false;
 bool end_parallel_reduce_callback                = false;
 bool begin_parallel_scan_callback                = false;
 bool end_parallel_scan_callback                  = false;
+bool begin_single_callback                       = false;
+bool end_single_callback                         = false;
 bool push_region_callback                        = false;
 bool pop_region_callback                         = false;
 bool allocate_data_callback                      = false;
@@ -73,6 +67,12 @@ void test_tools_initialization_with_callbacks() {
       });
   Kokkos::Tools::Experimental::set_end_parallel_scan_callback(
       [](const uint64_t /*k*/) { end_parallel_scan_callback = true; });
+  Kokkos::Tools::Experimental::set_begin_single_callback(
+      [](const char* /*n*/, const uint32_t /*d*/, uint64_t* /*k*/) {
+        begin_single_callback = true;
+      });
+  Kokkos::Tools::Experimental::set_end_single_callback(
+      [](const uint64_t /*k*/) { end_single_callback = true; });
   Kokkos::Tools::Experimental::set_push_region_callback(
       [](const char* /*name*/) { push_region_callback = true; });
   Kokkos::Tools::Experimental::set_pop_region_callback(
@@ -172,6 +172,17 @@ void test_tools_initialization_with_callbacks() {
             hold_result += i;
           }
         });
+#ifndef KOKKOS_ENABLE_OPENACC
+    Kokkos::single(
+        "single", Kokkos::SinglePolicy<Kokkos::DefaultExecutionSpace>(),
+        KOKKOS_LAMBDA(int& res) { res *= 2; }, result);
+#else
+    // single returning a value is not available with the OpenACC backend
+    Kokkos::single("single",
+                   Kokkos::SinglePolicy<Kokkos::DefaultExecutionSpace>(),
+                   KOKKOS_LAMBDA(){});
+#endif
+
     Kokkos::Profiling::pushRegion("push_region");
     Kokkos::Profiling::popRegion();
     uint32_t sectionId;
@@ -192,6 +203,8 @@ void test_tools_initialization_with_callbacks() {
     ASSERT_TRUE(end_parallel_reduce_callback);
     ASSERT_TRUE(begin_parallel_scan_callback);
     ASSERT_TRUE(end_parallel_scan_callback);
+    ASSERT_TRUE(begin_single_callback);
+    ASSERT_TRUE(end_single_callback);
     ASSERT_TRUE(push_region_callback);
     ASSERT_TRUE(pop_region_callback);
     ASSERT_TRUE(allocate_data_callback);

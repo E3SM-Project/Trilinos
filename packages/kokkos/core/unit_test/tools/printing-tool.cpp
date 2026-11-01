@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #include <inttypes.h>
 #include <iostream>
@@ -35,6 +22,7 @@ struct SpaceHandle {
 const int parallel_for_id    = 0;
 const int parallel_reduce_id = 1;
 const int parallel_scan_id   = 2;
+const int single_id          = 3;
 
 extern "C" void kokkosp_init_library(
     const int /*loadSeq*/, const uint64_t /*interfaceVer*/,
@@ -91,6 +79,17 @@ extern "C" void kokkosp_begin_parallel_reduce(const char* name,
 
 extern "C" void kokkosp_end_parallel_reduce(const uint64_t kID) {
   std::cout << "kokkosp_end_parallel_reduce:" << kID << "::";
+}
+
+extern "C" void kokkosp_begin_single(const char* name, const uint32_t devID,
+                                     uint64_t* kID) {
+  *kID = single_id;
+  std::cout << "kokkosp_begin_single:" << name << ":" << devID << ":" << *kID
+            << "::";
+}
+
+extern "C" void kokkosp_end_single(const uint64_t kID) {
+  std::cout << "kokkosp_end_single:" << kID << "::";
 }
 
 extern "C" void kokkosp_push_profile_region(const char* regionName) {

@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 /// \file Kokkos_Pair.hpp
 /// \brief Declaration and definition of Kokkos::pair.
@@ -84,17 +71,6 @@ struct pair {
       : first(p.first), second(p.second) {
   }
 
-#ifdef KOKKOS_ENABLE_DEPRECATED_CODE_4
-  /// \brief Copy constructor.
-  ///
-  /// This calls the copy constructors of T1 and T2.  It won't compile
-  /// if those copy constructors are not defined and public.
-  template <class U, class V>
-  KOKKOS_DEPRECATED KOKKOS_FORCEINLINE_FUNCTION constexpr pair(
-      const volatile pair<U, V>& p)
-      : first(p.first), second(p.second) {}
-#endif
-
   /// \brief Assignment operator.
   ///
   /// This calls the assignment operators of T1 and T2.  It won't
@@ -106,31 +82,9 @@ struct pair {
     return *this;
   }
 
-#ifdef KOKKOS_ENABLE_DEPRECATED_CODE_4
-  /// \brief Assignment operator, for volatile <tt>*this</tt>.
-  ///
-  /// \param p [in] Input; right-hand side of the assignment.
-  ///
-  /// This calls the assignment operators of T1 and T2.  It will not
-  /// compile if the assignment operators are not defined and public.
-  ///
-  /// This operator returns \c void instead of <tt>volatile pair<T1,
-  /// T2>& </tt>.  See Kokkos Issue #177 for the explanation.  In
-  /// practice, this means that you should not chain assignments with
-  /// volatile lvalues.
-  template <class U, class V>
-  KOKKOS_DEPRECATED KOKKOS_FORCEINLINE_FUNCTION void operator=(
-      const volatile pair<U, V>& p) volatile {
-    first  = p.first;
-    second = p.second;
-    // We deliberately do not return anything here.  See explanation
-    // in public documentation above.
-  }
-#endif
-
   // from std::pair<U,V>
   template <class U, class V>
-  pair(const std::pair<U, V>& p) : first(p.first), second(p.second) {}
+  constexpr pair(const std::pair<U, V>& p) : first(p.first), second(p.second) {}
 
   /// \brief Return the std::pair version of this object.
   ///
@@ -175,7 +129,7 @@ struct pair<T1&, T2&> {
 
   // from std::pair<U,V>
   template <class U, class V>
-  pair(const std::pair<U, V>& p) : first(p.first), second(p.second) {}
+  constexpr pair(const std::pair<U, V>& p) : first(p.first), second(p.second) {}
 
   /// \brief Assignment operator.
   ///
@@ -232,7 +186,7 @@ struct pair<T1, T2&> {
 
   // from std::pair<U,V>
   template <class U, class V>
-  pair(const std::pair<U, V>& p) : first(p.first), second(p.second) {}
+  constexpr pair(const std::pair<U, V>& p) : first(p.first), second(p.second) {}
 
   /// \brief Assignment operator.
   ///
@@ -289,7 +243,7 @@ struct pair<T1&, T2> {
 
   // from std::pair<U,V>
   template <class U, class V>
-  pair(const std::pair<U, V>& p) : first(p.first), second(p.second) {}
+  constexpr pair(const std::pair<U, V>& p) : first(p.first), second(p.second) {}
 
   /// \brief Assignment operator.
   ///
@@ -316,6 +270,9 @@ struct pair<T1&, T2> {
     return std::make_pair(first, second);
   }
 };
+
+template <class T1, class T2>
+pair(const std::pair<T1, T2>&) -> pair<T1, T2>;
 
 //! Equality operator for Kokkos::pair.
 template <class T1, class T2>
@@ -413,87 +370,6 @@ KOKKOS_FORCEINLINE_FUNCTION pair<T1&, T2&> tie(T1& x, T2& y) {
   return (pair<T1&, T2&>(x, y));
 }
 
-#ifdef KOKKOS_ENABLE_DEPRECATED_CODE_4
-//
-// Specialization of Kokkos::pair for a \c void second argument.  This
-// is not actually a "pair"; it only contains one element, the first.
-//
-template <class T1>
-struct KOKKOS_DEPRECATED pair<T1, void> {
-  using first_type  = T1;
-  using second_type = void;
-
-  first_type first;
-  enum { second = 0 };
-
-  KOKKOS_DEFAULTED_FUNCTION constexpr pair() = default;
-
-  KOKKOS_FORCEINLINE_FUNCTION constexpr pair(const first_type& f) : first(f) {}
-
-  KOKKOS_FORCEINLINE_FUNCTION constexpr pair(const first_type& f, int)
-      : first(f) {}
-
-  template <class U>
-  KOKKOS_FORCEINLINE_FUNCTION constexpr pair(const pair<U, void>& p)
-      : first(p.first) {}
-
-  template <class U>
-  KOKKOS_FORCEINLINE_FUNCTION pair<T1, void>& operator=(
-      const pair<U, void>& p) {
-    first = p.first;
-    return *this;
-  }
-};
-
-//
-// Specialization of relational operators for Kokkos::pair<T1,void>.
-//
-
-#if defined(KOKKOS_ENABLE_DEPRECATION_WARNINGS) && \
-    defined(KOKKOS_COMPILER_GNU) && (KOKKOS_COMPILER_GNU < 1110)
-KOKKOS_IMPL_DISABLE_DEPRECATED_WARNINGS_PUSH()
-#endif
-template <class T1>
-KOKKOS_DEPRECATED KOKKOS_FORCEINLINE_FUNCTION constexpr bool operator==(
-    const pair<T1, void>& lhs, const pair<T1, void>& rhs) {
-  return lhs.first == rhs.first;
-}
-
-template <class T1>
-KOKKOS_DEPRECATED KOKKOS_FORCEINLINE_FUNCTION constexpr bool operator!=(
-    const pair<T1, void>& lhs, const pair<T1, void>& rhs) {
-  return !(lhs == rhs);
-}
-
-template <class T1>
-KOKKOS_DEPRECATED KOKKOS_FORCEINLINE_FUNCTION constexpr bool operator<(
-    const pair<T1, void>& lhs, const pair<T1, void>& rhs) {
-  return lhs.first < rhs.first;
-}
-
-template <class T1>
-KOKKOS_DEPRECATED KOKKOS_FORCEINLINE_FUNCTION constexpr bool operator<=(
-    const pair<T1, void>& lhs, const pair<T1, void>& rhs) {
-  return !(rhs < lhs);
-}
-
-template <class T1>
-KOKKOS_DEPRECATED KOKKOS_FORCEINLINE_FUNCTION constexpr bool operator>(
-    const pair<T1, void>& lhs, const pair<T1, void>& rhs) {
-  return rhs < lhs;
-}
-
-template <class T1>
-KOKKOS_DEPRECATED KOKKOS_FORCEINLINE_FUNCTION constexpr bool operator>=(
-    const pair<T1, void>& lhs, const pair<T1, void>& rhs) {
-  return !(lhs < rhs);
-}
-#if defined(KOKKOS_ENABLE_DEPRECATION_WARNINGS) && \
-    defined(KOKKOS_COMPILER_GNU) && (KOKKOS_COMPILER_GNU < 1110)
-KOKKOS_IMPL_DISABLE_DEPRECATED_WARNINGS_POP()
-#endif
-#endif
-
 namespace Impl {
 template <class T>
 struct is_pair_like : std::false_type {};
@@ -502,9 +378,150 @@ struct is_pair_like<Kokkos::pair<T, U>> : std::true_type {};
 template <class T, class U>
 struct is_pair_like<std::pair<T, U>> : std::true_type {};
 
+template <typename T>
+struct is_std_pair : std::false_type {};
+
+template <typename T1, typename T2>
+struct is_std_pair<std::pair<T1, T2>> : std::true_type {};
+
+template <typename T>
+constexpr auto convert_to_kokkos_pair_if_std_pair(T t) {
+  if constexpr (is_std_pair<T>::value)
+    return Kokkos::pair<typename T::first_type, typename T::second_type>{t};
+  else
+    return t;
+}
+
+// Concept that checks if ANY type in a pack is a std::pair
+template <typename... Args>
+concept ContainsStdPair = (is_std_pair<Args>::value || ...);
+
 }  // end namespace Impl
 
+// index-based overloads
+template <std::size_t I, class T1, class T2>
+KOKKOS_INLINE_FUNCTION constexpr auto& get(Kokkos::pair<T1, T2>& p) noexcept {
+  static_assert(I < 2, "Kokkos::pair only has 2 elements");
+  if constexpr (I == 0) {
+    return p.first;
+  } else {
+    return p.second;
+  }
+}
+
+template <std::size_t I, class T1, class T2>
+KOKKOS_INLINE_FUNCTION constexpr const auto& get(
+    const Kokkos::pair<T1, T2>& p) noexcept {
+  static_assert(I < 2, "Kokkos::pair only has 2 elements");
+  if constexpr (I == 0) {
+    return p.first;
+  } else {
+    return p.second;
+  }
+}
+
+// Suppress clang-tidy warnings for this function since moving would do the
+// incorrect thing here
+// NOLINTBEGIN(cppcoreguidelines-rvalue-reference-param-not-moved)
+template <std::size_t I, class T1, class T2>
+KOKKOS_INLINE_FUNCTION constexpr auto&& get(Kokkos::pair<T1, T2>&& p) noexcept {
+  static_assert(I < 2, "Kokkos::pair only has 2 elements");
+  if constexpr (I == 0) {
+    return std::forward<T1>(p.first);
+  } else {
+    return std::forward<T2>(p.second);
+  }
+}
+// NOLINTEND(cppcoreguidelines-rvalue-reference-param-not-moved)
+
+template <std::size_t I, class T1, class T2>
+KOKKOS_INLINE_FUNCTION constexpr const auto&& get(
+    const Kokkos::pair<T1, T2>&& p) noexcept {
+  static_assert(I < 2, "Kokkos::pair only has 2 elements");
+  if constexpr (I == 0) {
+    return std::forward<const T1>(p.first);
+  } else {
+    return std::forward<const T2>(p.second);
+  }
+}
+
+// type-based overloads
+template <class T, class U>
+KOKKOS_INLINE_FUNCTION constexpr T& get(Kokkos::pair<T, U>& p) noexcept {
+  return p.first;
+}
+
+template <class T, class U>
+KOKKOS_INLINE_FUNCTION constexpr const T& get(
+    const Kokkos::pair<T, U>& p) noexcept {
+  return p.first;
+}
+
+// Suppress clang-tidy warnings for this function since moving would do the
+// incorrect thing here
+// NOLINTBEGIN(cppcoreguidelines-rvalue-reference-param-not-moved)
+template <class T, class U>
+KOKKOS_INLINE_FUNCTION constexpr T&& get(Kokkos::pair<T, U>&& p) noexcept {
+  return std::forward<T>(p.first);
+}
+// NOLINTEND(cppcoreguidelines-rvalue-reference-param-not-moved)
+
+template <class T, class U>
+KOKKOS_INLINE_FUNCTION constexpr const T&& get(
+    const Kokkos::pair<T, U>&& p) noexcept {
+  return std::forward<const T>(p.first);
+}
+
+template <class T, class U>
+KOKKOS_INLINE_FUNCTION constexpr T& get(Kokkos::pair<U, T>& p) noexcept {
+  return p.second;
+}
+
+template <class T, class U>
+KOKKOS_INLINE_FUNCTION constexpr const T& get(
+    const Kokkos::pair<U, T>& p) noexcept {
+  return p.second;
+}
+
+// Suppress clang-tidy warnings for this function since moving would do the
+// incorrect thing here
+// NOLINTBEGIN(cppcoreguidelines-rvalue-reference-param-not-moved)
+template <class T, class U>
+KOKKOS_INLINE_FUNCTION constexpr T&& get(Kokkos::pair<U, T>&& p) noexcept {
+  return std::forward<T>(p.second);
+}
+// NOLINTEND(cppcoreguidelines-rvalue-reference-param-not-moved)
+
+template <class T, class U>
+KOKKOS_INLINE_FUNCTION constexpr const T&& get(
+    const Kokkos::pair<U, T>&& p) noexcept {
+  return std::forward<const T>(p.second);
+}
 }  // namespace Kokkos
+
+// Suppress clang-tidy warnings complaining about modifying std namespace
+// objects Specializing tuple_element and tuple_size are perfectly okay and
+// necessary, so these linter warnings are spurious
+// NOLINTBEGIN(bugprone-std-namespace-modification)
+template <class T1, class T2>
+struct std::tuple_size<Kokkos::pair<T1, T2>>
+    : std::integral_constant<std::size_t, 2> {};
+
+template <std::size_t I, class T1, class T2>
+struct std::tuple_element<I, Kokkos::pair<T1, T2>> {
+  static_assert(I < 2, "Kokkos::pair only has 2 elements");
+};
+
+template <class T1, class T2>
+struct std::tuple_element<0, Kokkos::pair<T1, T2>> {
+  using type = T1;
+};
+
+template <class T1, class T2>
+struct std::tuple_element<1, Kokkos::pair<T1, T2>> {
+  using type = T2;
+};
+// NOLINTEND(bugprone-std-namespace-modification)
 
 #ifdef KOKKOS_IMPL_PUBLIC_INCLUDE_NOTDEFINED_PAIR
 #undef KOKKOS_IMPL_PUBLIC_INCLUDE

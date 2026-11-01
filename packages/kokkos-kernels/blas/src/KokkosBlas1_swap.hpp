@@ -1,24 +1,10 @@
-/*
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
-*/
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOSBLAS1_SWAP_HPP_
 #define KOKKOSBLAS1_SWAP_HPP_
 
+#include <KokkosKernels_helpers.hpp>
 #include <KokkosBlas1_swap_spec.hpp>
 
 namespace KokkosBlas {
@@ -62,15 +48,15 @@ void swap(execution_space const& space, XVector const& x, YVector const& y) {
   static_assert(Kokkos::SpaceAccessibility<execution_space, typename YVector::memory_space>::accessible,
                 "swap: execution_space cannot access data in YVector");
 
-  using XVector_Internal = Kokkos::View<
-      typename XVector::non_const_value_type*, typename KokkosKernels::Impl::GetUnifiedLayout<XVector>::array_layout,
-      Kokkos::Device<execution_space, typename XVector::memory_space>, Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
-  using YVector_Internal = Kokkos::View<
-      typename YVector::non_const_value_type*, typename KokkosKernels::Impl::GetUnifiedLayout<YVector>::array_layout,
-      Kokkos::Device<execution_space, typename YVector::memory_space>, Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
+  using XVector_Internal = Kokkos::View<typename XVector::non_const_value_type*,
+                                        typename KokkosKernels::Impl::GetUnifiedLayout<XVector>::array_layout,
+                                        execution_space, Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
+  using YVector_Internal = Kokkos::View<typename YVector::non_const_value_type*,
+                                        typename KokkosKernels::Impl::GetUnifiedLayout<YVector>::array_layout,
+                                        execution_space, Kokkos::MemoryTraits<Kokkos::Unmanaged> >;
 
-  XVector_Internal X(x);
-  YVector_Internal Y(y);
+  XVector_Internal X = KokkosKernels::Impl::unificationCast<XVector_Internal>(x);
+  YVector_Internal Y = KokkosKernels::Impl::unificationCast<YVector_Internal>(y);
 
   // Runtime check of the length of X and Y
   if (static_cast<int64_t>(X.extent(0)) != static_cast<int64_t>(Y.extent(0))) {

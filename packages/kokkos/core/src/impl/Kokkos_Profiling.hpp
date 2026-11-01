@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_IMPL_KOKKOS_PROFILING_HPP
 #define KOKKOS_IMPL_KOKKOS_PROFILING_HPP
@@ -91,6 +78,9 @@ void endParallelScan(const uint64_t kernelID);
 void beginParallelReduce(const std::string& kernelPrefix, const uint32_t devID,
                          uint64_t* kernelID);
 void endParallelReduce(const uint64_t kernelID);
+void beginSingle(const std::string& kernelPrefix, const uint32_t devID,
+                 uint64_t* kernelID);
+void endSingle(const uint64_t kernelID);
 
 void pushRegion(const std::string& kName);
 void popRegion();
@@ -102,17 +92,17 @@ void destroyProfileSection(const uint32_t secID);
 
 void markEvent(const std::string& evName);
 
-void allocateData(const SpaceHandle space, const std::string label,
+void allocateData(const SpaceHandle space, const std::string& label,
                   const void* ptr, const uint64_t size);
-void deallocateData(const SpaceHandle space, const std::string label,
+void deallocateData(const SpaceHandle space, const std::string& label,
                     const void* ptr, const uint64_t size);
 
-void beginDeepCopy(const SpaceHandle dst_space, const std::string dst_label,
+void beginDeepCopy(const SpaceHandle dst_space, const std::string& dst_label,
                    const void* dst_ptr, const SpaceHandle src_space,
-                   const std::string src_label, const void* src_ptr,
+                   const std::string& src_label, const void* src_ptr,
                    const uint64_t size);
 void endDeepCopy();
-void beginFence(const std::string name, const uint32_t deviceId,
+void beginFence(const std::string& name, const uint32_t deviceId,
                 uint64_t* handle);
 void endFence(const uint64_t handle);
 
@@ -224,6 +214,8 @@ void set_begin_parallel_reduce_callback(beginFunction callback);
 void set_end_parallel_reduce_callback(endFunction callback);
 void set_begin_parallel_scan_callback(beginFunction callback);
 void set_end_parallel_scan_callback(endFunction callback);
+void set_begin_single_callback(beginFunction callback);
+void set_end_single_callback(endFunction callback);
 void set_push_region_callback(pushFunction callback);
 void set_pop_region_callback(popFunction callback);
 void set_allocate_data_callback(allocateDataFunction callback);
@@ -283,6 +275,8 @@ using Kokkos::Tools::finalize;
 using Kokkos::Tools::beginParallelFor;
 using Kokkos::Tools::beginParallelReduce;
 using Kokkos::Tools::beginParallelScan;
+using Kokkos::Tools::beginSingle;
+using Kokkos::Tools::endSingle;
 using Kokkos::Tools::endParallelFor;
 using Kokkos::Tools::endParallelReduce;
 using Kokkos::Tools::endParallelScan;
@@ -312,6 +306,7 @@ using Kokkos::Tools::Experimental::set_begin_deep_copy_callback;
 using Kokkos::Tools::Experimental::set_begin_parallel_for_callback;
 using Kokkos::Tools::Experimental::set_begin_parallel_reduce_callback;
 using Kokkos::Tools::Experimental::set_begin_parallel_scan_callback;
+using Kokkos::Tools::Experimental::set_begin_single_callback;
 using Kokkos::Tools::Experimental::set_create_profile_section_callback;
 using Kokkos::Tools::Experimental::set_deallocate_data_callback;
 using Kokkos::Tools::Experimental::set_destroy_profile_section_callback;
@@ -319,6 +314,7 @@ using Kokkos::Tools::Experimental::set_end_deep_copy_callback;
 using Kokkos::Tools::Experimental::set_end_parallel_for_callback;
 using Kokkos::Tools::Experimental::set_end_parallel_reduce_callback;
 using Kokkos::Tools::Experimental::set_end_parallel_scan_callback;
+using Kokkos::Tools::Experimental::set_end_single_callback;
 using Kokkos::Tools::Experimental::set_finalize_callback;
 using Kokkos::Tools::Experimental::set_init_callback;
 using Kokkos::Tools::Experimental::set_parse_args_callback;

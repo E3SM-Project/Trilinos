@@ -1,18 +1,5 @@
-//@HEADER
-// ************************************************************************
-//
-//                        Kokkos v. 4.0
-//       Copyright (2022) National Technology & Engineering
-//               Solutions of Sandia, LLC (NTESS).
-//
-// Under the terms of Contract DE-NA0003525 with NTESS,
-// the U.S. Government retains certain rights in this software.
-//
-// Part of Kokkos, under the Apache License v2.0 with LLVM Exceptions.
-// See https://kokkos.org/LICENSE for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//@HEADER
+// SPDX-FileCopyrightText: Copyright Contributors to the Kokkos project
 
 #ifndef KOKKOS_SERIAL_PARALLEL_MDRANGE_HPP
 #define KOKKOS_SERIAL_PARALLEL_MDRANGE_HPP
@@ -34,9 +21,10 @@ class ParallelFor<FunctorType, Kokkos::MDRangePolicy<Traits...>,
       MDRangePolicy, FunctorType, typename MDRangePolicy::work_tag, void>;
 
   const iterate_type m_iter;
+  const MDRangePolicy m_policy;
 
   void exec() const {
-    const typename Policy::member_type e = m_iter.m_rp.m_num_tiles;
+    const typename Policy::member_type e = m_policy.impl_num_tiles();
     for (typename Policy::member_type i = 0; i < e; ++i) {
       m_iter(i);
     }
@@ -50,8 +38,7 @@ class ParallelFor<FunctorType, Kokkos::MDRangePolicy<Traits...>,
 #ifndef KOKKOS_ENABLE_ATOMICS_BYPASS
     // Make sure kernels are running sequentially even when using multiple
     // threads
-    auto* internal_instance =
-        m_iter.m_rp.space().impl_internal_space_instance();
+    auto* internal_instance = m_policy.space().impl_internal_space_instance();
     std::lock_guard<std::mutex> lock(internal_instance->m_instance_mutex);
 #endif
     this->exec();
@@ -67,7 +54,7 @@ class ParallelFor<FunctorType, Kokkos::MDRangePolicy<Traits...>,
   }
   inline ParallelFor(const FunctorType& arg_functor,
                      const MDRangePolicy& arg_policy)
-      : m_iter(arg_policy, arg_functor) {}
+      : m_iter(arg_policy, arg_functor), m_policy(arg_policy) {}
 };
 
 template <class CombinedFunctorReducerType, class... Traits>
@@ -89,9 +76,10 @@ class ParallelReduce<CombinedFunctorReducerType,
       MDRangePolicy, CombinedFunctorReducerType, WorkTag, reference_type>;
   const iterate_type m_iter;
   const pointer_type m_result_ptr;
+  const MDRangePolicy m_policy;
 
   inline void exec(reference_type update) const {
-    const typename Policy::member_type e = m_iter.m_rp.m_num_tiles;
+    const typename Policy::member_type e = m_policy.impl_num_tiles();
     for (typename Policy::member_type i = 0; i < e; ++i) {
       m_iter(i, update);
     }
@@ -114,8 +102,7 @@ class ParallelReduce<CombinedFunctorReducerType,
     const size_t team_shared_size  = 0;  // Never shrinks
     const size_t thread_local_size = 0;  // Never shrinks
 
-    auto* internal_instance =
-        m_iter.m_rp.space().impl_internal_space_instance();
+    auto* internal_instance = m_policy.space().impl_internal_space_instance();
 
     // caused a possibly codegen-related slowdown, especially in GCC 9-11
     // with KOKKOS_ARCH_NATIVE
@@ -148,13 +135,14 @@ class ParallelReduce<CombinedFunctorReducerType,
                  const MDRangePolicy& arg_policy,
                  const ViewType& arg_result_view)
       : m_iter(arg_policy, arg_functor_reducer),
-        m_result_ptr(arg_result_view.data()) {
+        m_result_ptr(arg_result_view.data()),
+        m_policy(arg_policy) {
     static_assert(Kokkos::is_view<ViewType>::value,
                   "Kokkos::Serial reduce result must be a View");
 
     static_assert(
-        Kokkos::Impl::MemorySpaceAccess<typename ViewType::memory_space,
-                                        Kokkos::HostSpace>::accessible,
+        Kokkos::Impl::MemorySpaceAccess<
+            Kokkos::HostSpace, typename ViewType::memory_space>::accessible,
         "Kokkos::Serial reduce result must be a View accessible from "
         "HostSpace");
   }
