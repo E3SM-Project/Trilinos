@@ -13,7 +13,7 @@
 */
 
 #include "ROL_Stream.hpp"
-#include "Teuchos_GlobalMPISession.hpp"
+#include "ROL_GlobalMPISession.hpp"
 
 #include "ROL_Bounds.hpp"
 #include "ROL_Constraint.hpp"
@@ -252,11 +252,11 @@ int testCases(RealT tol, ROL::Ptr<std::ostream> outStream) {
   svErrors.push_back(calcError(result, target));
 
   *outStream << "Elementwise Test Case Errors (Infinity Norm):" << std::endl
-    << "  Inverse  = " << ewErrors[1] << std::endl
-    << "  Jacobian = " << ewErrors[2] << std::endl;
+    << "  Inverse  = " << ewErrors[0] << std::endl
+    << "  Jacobian = " << ewErrors[1] << std::endl;
   *outStream << "StdBoundConstraint Test Case Errors (Infinity Norm):" << std::endl
-    << "  Inverse  = " << svErrors[1] << std::endl
-    << "  Jacobian = " << svErrors[2] << std::endl;
+    << "  Inverse  = " << svErrors[0] << std::endl
+    << "  Jacobian = " << svErrors[1] << std::endl;
   *outStream << std::endl;
 
   RealT maxError = std::max(*std::max_element(svErrors.begin(), svErrors.end()),
@@ -266,7 +266,7 @@ int testCases(RealT tol, ROL::Ptr<std::ostream> outStream) {
 
 int main(int argc, char *argv[]) {
 
-  Teuchos::GlobalMPISession mpiSession(&argc, &argv);
+  ROL::GlobalMPISession mpiSession(&argc, &argv);
 
   // This little trick lets us print to std::cout only if a
   // (dummy) command-line argument is provided.
